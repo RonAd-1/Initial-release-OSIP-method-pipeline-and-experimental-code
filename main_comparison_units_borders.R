@@ -44,6 +44,7 @@ library(htmlwidgets)
 library(webshot2)
 library(cem)
 library(MatchIt)
+library(optmatch)
 library(mediation)
 library(causaldata)
 library(ggplot2)
@@ -55,6 +56,7 @@ library(plotly)
 library(dplyr)
 library(purrr)
 library(sensitivitymult)
+library(optrefine)
 
 # 1. SETUP
 source("dataset_configs.R", echo = FALSE)
@@ -87,23 +89,6 @@ dataset_name <- DATASET_CHOICES$LINDNER
 # dataset_name <- DATASET_CHOICES$JOBS
 # dataset_name <- DATASET_CHOICES$IDHP
 # dataset_name <- DATASET_CHOICES$NHEFS
-
-# IDHP
-# delta_values <- seq(0.15, 0.25, by = 0.05)
-
-# NSW
-# delta_values <- seq(0.15, 0.25, by = 0.05)
-# delta_values <- c(0.25)
-# delta_values <- c(0.15, 0.25)
-
-# JOBS
-# delta_values <- seq(0.05, 0.08, by = 0.02)
-# delta_values <- c(0.05, 0.1)
-# delta_values <- c(0.07)
-
-# LINDER
-# delta_values <- seq(0.15, 0.25, by = 0.05)
-# delta_values <- c(0.2, 0.25)
 
 # Choose your delta value\s. Can be a single value:
 # delta_values <- c(0.20)
@@ -140,15 +125,13 @@ base_dir <- tryCatch({
   "" 
 })
 
+debug_glb = params$DEBUG_STATUS[1]
+
 sample_flag = params$SAMPLE[2] # 1 for TRUE, 2 for FALSE 
 
 max_val_for_plot <- params$MAX_VAL_FOR_PLOT
 
 # --- DATA ACQUISITION ---
-# The Manager handles cache, PS calculation, and sampling internally
-# prepared_data <- get_working_data(dataset_name, sample_flag, datasets, params, base_dir)
-
-# prepared_data <- load_and_prep_data(dataset_name, sample_flag, datasets, params)
 prepared_data <- load_and_prep_data(dataset_name, sample_flag, datasets, params)
 
 # Extract objects for the workspace
@@ -158,9 +141,7 @@ treatment_col <- data_config$TREATMENT_VAR
 outcome_var <- data_config$OUTCOME_VAR
 id_var <- data_config$ID_VAR
 
-
-
-# [IMPROVED] GLOBAL FLIP FOR LINDNER
+# Global flip for the relevant cases (LINDNER and JOBS datasets)
 if (dataset_name == datasets$LINDNER || dataset_name == datasets$JOBS) {
   cat("\n[!] JOBS or LINDNER detected: Creating 'treat_flipped' for matching...\n")
   
@@ -175,12 +156,12 @@ if (dataset_name == datasets$LINDNER || dataset_name == datasets$JOBS) {
   treatment_col <- "treat_flipped"
 } 
 
-
-# seed_in is not relevant if using the entire dataset. For larger ones, 
-# a sampling can be used but in all results shown in the paper (and appendix) 
-# we didn't use that (sample_flag), we set sample_flag as FALSE.   
-
 if (sample_flag) {
+  
+  # seed_in is not relevant if using the entire dataset. For larger ones, 
+  # a sampling can be used but in all results shown in the paper (and appendix) 
+  # we didn't use that (sample_flag), we set sample_flag as FALSE.   
+  
   seed_in <- params$SEED_IN
   data_subset <- sample_dataset (seed_in, treatment_col, dataset_full, dataset_name, params)
 } else {data_subset <- dataset_full}
@@ -535,7 +516,7 @@ for (current_delta in delta_values) {
     # 1. Extract the specific message for the user
     error_info <- if (!is.null(osip_res_step_1$error)) {
       if (is.list(osip_res_step_1$error)) osip_res_step_1$error$error else as.character(osip_res_step_1$error)
-    
+    }
     # 2. Log the failure
     cat(sprintf("\n[!] SKIPPING Delta = %.3f: %s\n", current_delta, error_info))
     

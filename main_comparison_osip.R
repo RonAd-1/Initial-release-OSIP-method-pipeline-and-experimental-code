@@ -1,36 +1,36 @@
 
-# main_comparison_osip_new.R
+# main_comparison_osip.R
 
 # Load required packages
-if (!require(MatchIt)) install.packages("MatchIt")
-if (!require(causaldata)) install.packages("causaldata")
-if (!require(cem)) install.packages("cem")
-if (!require(ggplot2)) install.packages("ggplot2")
-if (!require(ggridges)) install.packages("ggridges")
-if (!require(tidyr)) install.packages("tidyr")
-if (!require(cobalt)) install.packages("cobalt")
-if (!require(scales)) install.packages("scales")
-if (!require(plotly)) install.packages("plotly") 
-if (!require(dplyr)) install.packages("dplyr") # For data manipulation
-if (!require(purrr)) install.packages("purrr")
-if (!require(sensitivitymult)) install.packages("sensitivitymult")
-if (!require(PSAgraphics)) install.packages("PSAgraphics")
-if (!require(MASS)) install.packages("MASS")
-if (!require(sensitivityfull)) install.packages("sensitivityfull")
-if (!require(sensitivitymv)) install.packages("sensitivitymv")
-if (!require(Matching)) install.packages("Matching")
-if (!require(rgenoud)) install.packages("rgenoud")
-if (!require(viridis)) install.packages("viridis")
-if (!require(mediation)) install.packages("mediation")
-if (!require(htmlwidgets)) install.packages("htmlwidgets")
-if (!require(webshot2)) install.packages("webshot2")
-
-# For dist plot
-if (!require(patchwork)) install.packages("patchwork")
-
-# Packages for refinement of strata paper
-if (!require(optrefine)) install.packages("optrefine")
-if (!require(Rglpk)) install.packages("Rglpk") # if not using Gurobi
+# if (!require(MatchIt)) install.packages("MatchIt")
+# if (!require(causaldata)) install.packages("causaldata")
+# if (!require(cem)) install.packages("cem")
+# if (!require(ggplot2)) install.packages("ggplot2")
+# if (!require(ggridges)) install.packages("ggridges")
+# if (!require(tidyr)) install.packages("tidyr")
+# if (!require(cobalt)) install.packages("cobalt")
+# if (!require(scales)) install.packages("scales")
+# if (!require(plotly)) install.packages("plotly") 
+# if (!require(dplyr)) install.packages("dplyr") # For data manipulation
+# if (!require(purrr)) install.packages("purrr")
+# if (!require(sensitivitymult)) install.packages("sensitivitymult")
+# if (!require(PSAgraphics)) install.packages("PSAgraphics")
+# if (!require(MASS)) install.packages("MASS")
+# if (!require(sensitivityfull)) install.packages("sensitivityfull")
+# if (!require(sensitivitymv)) install.packages("sensitivitymv")
+# if (!require(Matching)) install.packages("Matching")
+# if (!require(rgenoud)) install.packages("rgenoud")
+# if (!require(viridis)) install.packages("viridis")
+# if (!require(mediation)) install.packages("mediation")
+# if (!require(htmlwidgets)) install.packages("htmlwidgets")
+# if (!require(webshot2)) install.packages("webshot2")
+# 
+# # For dist plot
+# if (!require(patchwork)) install.packages("patchwork")
+# 
+# # Packages for refinement of strata paper
+# if (!require(optrefine)) install.packages("optrefine")
+# if (!require(Rglpk)) install.packages("Rglpk") # if not using Gurobi
 
 library(viridis)
 library(Matching)
@@ -42,8 +42,8 @@ library(PSAgraphics)
 library(patchwork)
 library(htmlwidgets)
 library(webshot2)
-library(cem)
 library(MatchIt)
+library(optmatch)
 library(mediation)
 library(causaldata)
 library(ggplot2)
@@ -56,66 +56,30 @@ library(dplyr)
 library(purrr)
 library(sensitivitymult)
 
-# 1. SETUP
 source("dataset_configs.R", echo = FALSE)
-# source("find_initial_partition_test.R", echo = FALSE) # File containing the new wrappers above
 source("osip_functions.R", echo = FALSE)
 source("heuristics_helping_functions.R", echo = FALSE)
-source("cardinality_matching.R", echo = FALSE)
-source("genetic_matching.R", echo = FALSE)
-source("full_matching.R", echo = FALSE)
-source("cem.R", echo = FALSE)
 source("plots.R", echo = FALSE)
 source("comparison_methods.R", echo = FALSE)
 source("original_distance_for_intervals.R", echo = FALSE)
 source("complete_comparison.R", echo = FALSE)
 source("heuristic_units.R", echo = FALSE)
-source("cochran_quintile.R", echo = FALSE)
 source("borders_helping_functions.R", echo = FALSE)
-source("ejecfrac_hist_multiple.R", echo = FALSE)
 
-# first_run_for_static_models <- TRUE
-
-# 1. Load your choice from config
+# Load your choice from config
 datasets <- DATASET_CHOICES
 params <- PARAMS
 methods <- Methods
 method_labels <- METHOD_LABELS
-# matching_1_1_comparison <- METHODS_1_TO_1_MATCHING
-# matching_1_1_osip <- METHODS_1_TO_1_MATCHING_OSIP
 matching_non_1_1 <- METHODS_NON_1_TO_1_MATCHING
-# covs_to_check <- LINDNER_CONFIG$COVARIATE_FOR_BALANCE_ANALYSIS
-# covs_to_check <- NSW_MIXTAPE_CONFIG$COVARIATE_FOR_BALANCE_ANALYSIS
 
 # dataset_name <- DATASET_CHOICES$RHC
 # dataset_name <- DATASET_CHOICES$NSW_MIXTAPE
-# dataset_name <- DATASET_CHOICES$LINDNER
+dataset_name <- DATASET_CHOICES$LINDNER
 # dataset_name <- DATASET_CHOICES$JOBS
 # dataset_name <- DATASET_CHOICES$IDHP
-dataset_name <- DATASET_CHOICES$NHEFS
+# dataset_name <- DATASET_CHOICES$NHEFS
 
-# IDHP
-# delta_values <- seq(0.15, 0.25, by = 0.05)
-
-# NSW
-# delta_values <- seq(0.15, 0.25, by = 0.05)
-# delta_values <- c(0.25)
-# delta_values <- c(0.15, 0.25)
-
-# JOBS
-# delta_values <- seq(0.05, 0.08, by = 0.02)
-# delta_values <- c(0.05, 0.1)
-# delta_values <- c(0.07)
-
-# LINDER
-# delta_values <- seq(0.15, 0.25, by = 0.05)
-# delta_values <- c(0.2, 0.25)
-
-# delta_values <- c(0.1)
-# delta_values <- c(0.20)
-# delta_values <- c(0.2)
-
-# NHEFS
 delta_values <- c(0.175)
 # delta_values <- seq(0.15, 0.20, by = 0.05)
 
@@ -124,24 +88,11 @@ delta_sweep_results <- list()
 
 dist_power <- 1
 
-# Do: Remove the analysis later
 target_dir <- file.path(
   "outputs",
   dataset_name,
-  "combined"
-  # "experiment"
-  # "analysis",
-  # delta_path
+  "osip"
 )
-
-# Use %g for "smart" numeric formatting
-# final_path <- sprintf("%s_%g", base_path, dist_power)
-
-# TODO: Change later for the general path
-# target_dir <- file.path(final_path, dataset_name)
-
-# TODO: Change later for the general path
-# target_dir <- file.path("outputs", dataset_name)
 
 base_dir <- tryCatch({
   # recursive = TRUE ensures both 'outputs' and the subfolder are created
@@ -157,41 +108,22 @@ base_dir <- tryCatch({
   "" 
 })
 
-# output_path = sprintf("%smain_%s_output_delta_%g_power_%g.txt", base_dir, 
-#                       dataset_name, current_delta, dist_power)
-# 
-# # output_path = sprintf("%smain_%s_output.txt", base_dir, dataset_name)
-# 
-# # Start capturing output to a file
-# sink(output_path, type = "output")
-
 debug_glb = params$DEBUG_STATUS[1]
 
 sample_flag = params$SAMPLE[2] # 1 for TRUE, 2 for FALSE 
 
 max_val_for_plot <- params$MAX_VAL_FOR_PLOT
 
-# --- DATA ACQUISITION ---
-# The Manager handles cache, PS calculation, and sampling internally
-# prepared_data <- get_working_data(dataset_name, sample_flag, datasets, params, base_dir)
-
-# prepared_data <- load_and_prep_data(dataset_name, sample_flag, datasets, params)
 prepared_data <- load_and_prep_data(dataset_name, sample_flag, datasets, params)
 
 # Extract objects for the workspace
 dataset_full <- prepared_data$data
-# p_sorted    <- prepared_data$p_sorted
 data_config  <- prepared_data$data_config
 treatment_col <- data_config$TREATMENT_VAR
 outcome_var <- data_config$OUTCOME_VAR
 id_var <- data_config$ID_VAR
-# k_bound <- params$K_DP
 
-
-seed_in <- 25 # Move it later to the config file perhaps? 
-
-# Check ID format in the matrix
-# head(rownames(dist_matrix))
+# seed_in <- 25 # Move it later to the config file perhaps? 
 
 # [IMPROVED] GLOBAL FLIP FOR LINDNER
 if (dataset_name == datasets$LINDNER || dataset_name == datasets$JOBS) {
@@ -207,11 +139,6 @@ if (dataset_name == datasets$LINDNER || dataset_name == datasets$JOBS) {
   # This tells your matching functions to look at the flipped column instead
   treatment_col <- "treat_flipped"
 } 
-
-# else {treatment_col <- treatment_col_temp}
-
-# Debug
-# browser()
 
 if (sample_flag) {
   data_subset <- sample_dataset (seed_in, treatment_col, dataset_full, dataset_name, params)
@@ -229,17 +156,6 @@ p_sorted <- sort(unique(c(0, 1, data_subset$ps)))
 message("📊 Plotting Sampled Distribution...")
 plot_ps_distribution(data_subset, dataset_name, treatment_col, datasets, base_dir, title_suffix = "(Full Population)")
 
-# message("📊 Plotting The Initial Control Distribution......")
-# for (cov in covs_to_check) {
-#   check_control_selection_integrity(
-#     original_data = data_subset, 
-#     cov_name      = cov, 
-#     is_initial    = TRUE, 
-#     treatment_col = treatment_col,
-#     base_dir      = base_dir
-#   )
-# }
-
 # ============================================================
 # ✅ COMMON SUPPORT TRIMMING (MODERNIZED)
 # ============================================================
@@ -252,9 +168,6 @@ ps_vec <- data_subset$ps
 # Original sample sizes
 n_treat_original <- sum(t_vec == 1)
 n_control_original <- sum(t_vec == 0)
-
-# cat(sprintf("Original sample: %d treated, %d controls\n", 
-#             n_treat_original, n_control_original))
 
 message(sprintf("Original sample: %d treated, %d controls\n", 
                 n_treat_original, n_control_original))
@@ -374,10 +287,6 @@ S_inv_rob <- robust_env$S_inv
 # 1. Start the timer
 start_time = start_timer() 
 
-# --- 3. Create the 'Unmatched' Baseline ---
-# unmatched_res <- list(data_matched = cov_df_standardized %>% mutate(weights = 1))
-
-
 # Todo: Return later, currently analysis is on single delta value
 for (current_delta in delta_values) {
 
@@ -395,9 +304,6 @@ for (current_delta in delta_values) {
   
   power <- sprintf("power_%g", dist_power)
   
-  # TODO: Uncomment later, when dealing with multiple delta values again
-  # base_dir_delta <- file.path(base_dir, sprintf("delta_%g", current_delta), power)
-  
   base_dir_delta <- file.path(base_dir, delta_path, power)
   
   # Create the directory if it doesn't exist
@@ -407,15 +313,6 @@ for (current_delta in delta_values) {
   
   # 1. Create a fresh copy of global params
   iter_params <- params
-  
-  # k_bound <- floor(1 / current_delta) + 4
-  
-  # 2. Update the SPECIFIC keys used by the DP and Heuristics
-  # iter_params$DELTA_DP <- current_delta
-  
-  # Formula: K_max = floor(1/Delta) + 5
-  # k_bound <- 2 * floor(1/current_delta)
-  # k_bound <- floor(1/current_delta) + 5
   
   if (TRIM_TO_COMMON_SUPPORT) 
     k_bound <- get_max_k(current_delta, left_border, right_border)
@@ -444,10 +341,7 @@ for (current_delta in delta_values) {
     # 1. Extract the specific message for the user
     error_info <- if (!is.null(osip_res_step_1$error)) {
       if (is.list(osip_res_step_1$error)) osip_res_step_1$error$error else as.character(osip_res_step_1$error)
-    } # else {
-    #   "DP failed to find a path to PS=1.0 (Infeasible under current constraints)"
-    # }
-    
+    }
     # 2. Log the failure
     cat(sprintf("\n[!] SKIPPING Delta = %.2f: %s\n", current_delta, error_info))
     
@@ -473,7 +367,6 @@ for (current_delta in delta_values) {
   
   
   # Storing the csv file of step 1
-  # Names are not that good: path_df? 
   save_partition_csv(
     df        = dp_intervals,
     delta_val = current_delta,
@@ -528,22 +421,9 @@ for (current_delta in delta_values) {
     dataset_name = dataset_name,
     # analyze_flag = TRUE,
     # analyze_flag = FALSE,
-    run_step2 = TRUE,
+    run_step2 = TRUE
     # osip_res_step1 = osip_res_strict_step1
   )
-  
-  # debug
-  # browser()
-  
-  # save_partition_csv(
-  #   df         = osip_res_strict_step2$best_intervals,
-  #   delta_val  = current_delta,
-  #   base_dir   = base_dir_delta,
-  #   method     = "heuristic_greedy",
-  #   step       = 2,
-  #   step2_mode = "strict",
-  # )
-  # Output filename: step2_heuristic_greedy_robust_partition_delta_0.10.csv
   
   # --- RUN ROBUST VERSION ---
   # Note: Generate the robust distance matrix if not already pre-calculated
@@ -568,7 +448,7 @@ for (current_delta in delta_values) {
     right_border = right_border,
     max_val_for_plot = max_val_for_plot,
     matching_non_1_1 = matching_non_1_1,
-    dataset_name = dataset_name,
+    dataset_name = dataset_name
     # analyze_flag = FALSE,
     # run_step2 = FALSE,
     # osip_res_step1 = NULL
@@ -594,7 +474,7 @@ for (current_delta in delta_values) {
     max_val_for_plot = max_val_for_plot,
     matching_non_1_1 = matching_non_1_1,
     dataset_name = dataset_name,
-    run_step2 = TRUE,
+    run_step2 = TRUE
     # analyze_flag = TRUE,
     # osip_res_step1 = osip_res_robust_step1
     # analyze_flag = FALSE
@@ -631,12 +511,7 @@ for (current_delta in delta_values) {
     # Robust solutions step 2
     # osip_step2_robust_best_balanced = osip_step2_robust_best_balanced,
     osip_step2_robust_res = osip_res_robust_step2,
-    
-    # unmatched_data = unmatched_res
   )
-  
-  # --- 5. Print Table and Final Plotting ---
-  # print(final_stats)
   
   ate_comparison_plot_comparison <- plot_ate_comparison(
     final_stats_comparison, 
@@ -660,7 +535,6 @@ for (current_delta in delta_values) {
     outcome_var    = data_config$OUTCOME_VAR,
     
     # Pass the full result objects, NOT just the matched data
-    # unmatched_res   = unmatched_res,
     osip_step1_strict_res = NULL,
     osip_step1_robust_res = NULL,
     
@@ -723,6 +597,3 @@ for (current_delta in delta_values) {
 }
 
 cat("\n--- OSIP Analysis Complete!!\n")
-
-
-

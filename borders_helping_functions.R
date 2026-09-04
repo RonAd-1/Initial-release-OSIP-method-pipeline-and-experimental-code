@@ -732,9 +732,6 @@ run_refined_quintile <- function(data, config, treatment_col, label, quintile_re
     stop("Refined Quintile requires the initial quintile_res object.")
   }
   
-  # DEBUG
-  # browser()
-  
   df_internal <- quintile_res$data_matched
   
   # --- UPDATED SUBCLASS ASSIGNMENT ---
