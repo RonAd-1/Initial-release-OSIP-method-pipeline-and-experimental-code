@@ -2,11 +2,7 @@
 
 PARAMS <- list(
   DELTA_DP = 0.2,
-  # K_DP = 
-  # ORIGINAL_DISTANCE_METRIC = "robust_mahalanobis",
-  # MATCHING_DISTANCE_METRIC = "robust_mahalanobis",
-  # ORIGINAL_DISTANCE_METRIC = "mahalanobis",
-  # MATCHING_DISTANCE_METRIC = "mahalanobis",
+  SEED_IN <- 25,
   S_inv = NULL,
   SAMPLE = c(TRUE,FALSE),
   SAMPLE_SIZE = 200,
@@ -77,7 +73,7 @@ METHODS_NON_1_TO_1_MATCHING <- c(
   METHOD_LABELS[Methods$full_matching]
 )
 
-# 0. CONSTANTS for Dataset Selection
+# CONSTANTS for Dataset Selection
 DATASET_CHOICES <- list(
   LALONDE = "lalonde",
   NSW_MIXTAPE = "nsw_mixtape",
@@ -157,9 +153,7 @@ NSW_MIXTAPE_CONFIG <- list(
   # Note: 'black' and 'hispan' are often treated as numeric (0/1) or factors depending on the analysis. 
   # Here we'll treat them as numeric 0/1 for simplicity in the NUMERIC list.
   NUMERIC_COVARIATES = c("age", "educ", "black", "hisp", "re74", "re75"),
-  FACTOR_COVARIATES = c("marr", "nodegree"), # Removed 'race', added 'black' and 'hisp' to numeric
-  # COVARIATE_FOR_BALANCE_ANALYSIS = c("re74", "re75")
-  COVARIATE_FOR_BALANCE_ANALYSIS = c("re75")
+  FACTOR_COVARIATES = c("marr", "nodegree") # Removed 'race', added 'black' and 'hisp' to numeric
 )
 
 # ============================================================
@@ -242,8 +236,7 @@ LINDNER_CONFIG <- list(
     "female", 
     "diabetic", 
     "acutemi"
-  ),
-  COVARIATE_FOR_BALANCE_ANALYSIS = c("ejecfrac")
+  )
 )
 
 
