@@ -1,37 +1,6 @@
 
 # main_comparison_osip.R
 
-# Load required packages
-# if (!require(MatchIt)) install.packages("MatchIt")
-# if (!require(causaldata)) install.packages("causaldata")
-# if (!require(cem)) install.packages("cem")
-# if (!require(ggplot2)) install.packages("ggplot2")
-# if (!require(ggridges)) install.packages("ggridges")
-# if (!require(tidyr)) install.packages("tidyr")
-# if (!require(cobalt)) install.packages("cobalt")
-# if (!require(scales)) install.packages("scales")
-# if (!require(plotly)) install.packages("plotly") 
-# if (!require(dplyr)) install.packages("dplyr") # For data manipulation
-# if (!require(purrr)) install.packages("purrr")
-# if (!require(sensitivitymult)) install.packages("sensitivitymult")
-# if (!require(PSAgraphics)) install.packages("PSAgraphics")
-# if (!require(MASS)) install.packages("MASS")
-# if (!require(sensitivityfull)) install.packages("sensitivityfull")
-# if (!require(sensitivitymv)) install.packages("sensitivitymv")
-# if (!require(Matching)) install.packages("Matching")
-# if (!require(rgenoud)) install.packages("rgenoud")
-# if (!require(viridis)) install.packages("viridis")
-# if (!require(mediation)) install.packages("mediation")
-# if (!require(htmlwidgets)) install.packages("htmlwidgets")
-# if (!require(webshot2)) install.packages("webshot2")
-# 
-# # For dist plot
-# if (!require(patchwork)) install.packages("patchwork")
-# 
-# # Packages for refinement of strata paper
-# if (!require(optrefine)) install.packages("optrefine")
-# if (!require(Rglpk)) install.packages("Rglpk") # if not using Gurobi
-
 library(viridis)
 library(Matching)
 library(rgenoud)
