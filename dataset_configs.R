@@ -2,6 +2,7 @@
 
 PARAMS <- list(
   DELTA_DP = 0.2,
+  SEED_IN <- 25,
   # K_DP = 
   # ORIGINAL_DISTANCE_METRIC = "robust_mahalanobis",
   # MATCHING_DISTANCE_METRIC = "robust_mahalanobis",

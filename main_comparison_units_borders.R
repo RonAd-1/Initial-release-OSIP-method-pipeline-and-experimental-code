@@ -1,36 +1,36 @@
 
 # main_comparison_units_borders.R
 
-# Load required packages
-if (!require(MatchIt)) install.packages("MatchIt")
-if (!require(causaldata)) install.packages("causaldata")
-if (!require(cem)) install.packages("cem")
-if (!require(ggplot2)) install.packages("ggplot2")
-if (!require(ggridges)) install.packages("ggridges")
-if (!require(tidyr)) install.packages("tidyr")
-if (!require(cobalt)) install.packages("cobalt")
-if (!require(scales)) install.packages("scales")
-if (!require(plotly)) install.packages("plotly") 
-if (!require(dplyr)) install.packages("dplyr") # For data manipulation
-if (!require(purrr)) install.packages("purrr")
-if (!require(sensitivitymult)) install.packages("sensitivitymult")
-if (!require(PSAgraphics)) install.packages("PSAgraphics")
-if (!require(MASS)) install.packages("MASS")
-if (!require(sensitivityfull)) install.packages("sensitivityfull")
-if (!require(sensitivitymv)) install.packages("sensitivitymv")
-if (!require(Matching)) install.packages("Matching")
-if (!require(rgenoud)) install.packages("rgenoud")
-if (!require(viridis)) install.packages("viridis")
-if (!require(mediation)) install.packages("mediation")
-if (!require(htmlwidgets)) install.packages("htmlwidgets")
-if (!require(webshot2)) install.packages("webshot2")
-
-# For dist plot
-if (!require(patchwork)) install.packages("patchwork")
-
-# Packages for refinement of strata paper
-if (!require(optrefine)) install.packages("optrefine")
-if (!require(Rglpk)) install.packages("Rglpk") # if not using Gurobi
+# # Load required packages
+# if (!require(MatchIt)) install.packages("MatchIt")
+# if (!require(causaldata)) install.packages("causaldata")
+# if (!require(cem)) install.packages("cem")
+# if (!require(ggplot2)) install.packages("ggplot2")
+# if (!require(ggridges)) install.packages("ggridges")
+# if (!require(tidyr)) install.packages("tidyr")
+# if (!require(cobalt)) install.packages("cobalt")
+# if (!require(scales)) install.packages("scales")
+# if (!require(plotly)) install.packages("plotly") 
+# if (!require(dplyr)) install.packages("dplyr") # For data manipulation
+# if (!require(purrr)) install.packages("purrr")
+# if (!require(sensitivitymult)) install.packages("sensitivitymult")
+# if (!require(PSAgraphics)) install.packages("PSAgraphics")
+# if (!require(MASS)) install.packages("MASS")
+# if (!require(sensitivityfull)) install.packages("sensitivityfull")
+# if (!require(sensitivitymv)) install.packages("sensitivitymv")
+# if (!require(Matching)) install.packages("Matching")
+# if (!require(rgenoud)) install.packages("rgenoud")
+# if (!require(viridis)) install.packages("viridis")
+# if (!require(mediation)) install.packages("mediation")
+# if (!require(htmlwidgets)) install.packages("htmlwidgets")
+# if (!require(webshot2)) install.packages("webshot2")
+# 
+# # For dist plot
+# if (!require(patchwork)) install.packages("patchwork")
+# 
+# # Packages for refinement of strata paper
+# if (!require(optrefine)) install.packages("optrefine")
+# if (!require(Rglpk)) install.packages("Rglpk") # if not using Gurobi
 
 library(viridis)
 library(Matching)
@@ -77,11 +77,9 @@ datasets <- DATASET_CHOICES
 params <- PARAMS
 methods <- Methods
 method_labels <- METHOD_LABELS
-# matching_1_1_comparison <- METHODS_1_TO_1_MATCHING
-# matching_1_1_osip <- METHODS_1_TO_1_MATCHING_OSIP
 matching_non_1_1 <- METHODS_NON_1_TO_1_MATCHING
-# covs_to_check <- NSW_MIXTAPE_CONFIG$COVARIATE_FOR_BALANCE_ANALYSIS
-# covs_to_check <- LINDNER_CONFIG$COVARIATE_FOR_BALANCE_ANALYSIS
+
+# Uncomment the relevant dataset
 
 # dataset_name <- DATASET_CHOICES$RHC
 # dataset_name <- DATASET_CHOICES$NSW_MIXTAPE
@@ -107,27 +105,25 @@ dataset_name <- DATASET_CHOICES$LINDNER
 # delta_values <- seq(0.15, 0.25, by = 0.05)
 # delta_values <- c(0.2, 0.25)
 
-delta_values <- c(0.20)
-
-# delta_values <- c(0.175)
-
-# NHEFS
+# Choose your delta value\s. Can be a single value:
+# delta_values <- c(0.20)
+# OR, multiple values:
 # delta_values <- seq(0.15, 0.20, by = 0.05)
+
+delta_values <- c(0.20)
 
 # Container for results
 delta_sweep_results <- list()
 
+# This value of dist_power is for the L^p norm that the DP uses. No need to change that in 
+# general, the L^1 norm is usually a solid choice. Unless, you want to check different powers. 
+
 dist_power <- 1
 
-# delta_path <- sprintf("delta_%g", current_delta)
-
+# Specify the target dir where files should be written to. 
 target_dir <- file.path(
   "outputs",
-  dataset_name,
-  "combined",
-  "experiment"
-  # "analysis"
-  # delta_path
+  dataset_name
 )
 
 base_dir <- tryCatch({
@@ -144,11 +140,7 @@ base_dir <- tryCatch({
   "" 
 })
 
-debug_glb = params$DEBUG_STATUS[1]
-
 sample_flag = params$SAMPLE[2] # 1 for TRUE, 2 for FALSE 
-
-large_gaps = FALSE
 
 max_val_for_plot <- params$MAX_VAL_FOR_PLOT
 
@@ -161,14 +153,12 @@ prepared_data <- load_and_prep_data(dataset_name, sample_flag, datasets, params)
 
 # Extract objects for the workspace
 dataset_full <- prepared_data$data
-# p_sorted    <- prepared_data$p_sorted
 data_config  <- prepared_data$data_config
 treatment_col <- data_config$TREATMENT_VAR
 outcome_var <- data_config$OUTCOME_VAR
 id_var <- data_config$ID_VAR
-# k_bound <- params$K_DP
 
-# seed_in <- 25 # Move it later to the config file perhaps? 
+
 
 # [IMPROVED] GLOBAL FLIP FOR LINDNER
 if (dataset_name == datasets$LINDNER || dataset_name == datasets$JOBS) {
@@ -185,7 +175,13 @@ if (dataset_name == datasets$LINDNER || dataset_name == datasets$JOBS) {
   treatment_col <- "treat_flipped"
 } 
 
+
+# seed_in is not relevant if using the entire dataset. For larger ones, 
+# a sampling can be used but in all results shown in the paper (and appendix) 
+# we didn't use that (sample_flag), we set sample_flag as FALSE.   
+
 if (sample_flag) {
+  seed_in <- params$SEED_IN
   data_subset <- sample_dataset (seed_in, treatment_col, dataset_full, dataset_name, params)
 } else {data_subset <- dataset_full}
 
@@ -194,7 +190,6 @@ message("📊 Calculating PS and plotting Full Population...")
 data_subset <- process_propensity_scores(data_subset, dataset_name, data_config, treatment_col, datasets, base_dir, title_suffix = "(Full Population)")
 
 p_sorted <- sort(unique(c(0, 1, data_subset$ps)))
-# p_sorted <- data_subset$p_sorted
 
 message("📊 Plotting Sampled Distribution...")
 plot_ps_distribution(data_subset, dataset_name, treatment_col, datasets, base_dir, title_suffix = "(Full Population)")
@@ -249,7 +244,7 @@ if (TRIM_TO_COMMON_SUPPORT) {
                   n_treated, n_control, nrow(data_subset)))
   # ==============================================
   
-  # 3. CRITICAL: Update p_sorted to the ACTUAL unit boundaries
+  # Update p_sorted to the ACTUAL unit boundaries
   # We no longer anchor to 0 and 1 here to keep the DP focused
   p_sorted <- sort(unique(data_subset$ps))
   
@@ -258,7 +253,7 @@ if (TRIM_TO_COMMON_SUPPORT) {
   right_border <- p_sorted[n_p]
   
   message(sprintf("DP Space recalibrated to: [%.4f, %.4f]", left_border, right_border))
-  # Add "(Trimmed)" to the title and set is_trimmed = TRUE
+
   plot_ps_distribution_trimmed(
     df = data_subset, 
     dataset_name = dataset_name, 
@@ -266,7 +261,7 @@ if (TRIM_TO_COMMON_SUPPORT) {
     datasets = datasets, 
     base_dir = base_dir, 
     title_suffix = "(Common Support Trimmed)", 
-    is_trimmed = TRUE # <--- Key change
+    is_trimmed = TRUE 
   )
   
 } else {
@@ -284,21 +279,8 @@ treatment_control_scores <- get_treatment_control_scores(treatment_map, data_sub
 treatment_scores <- treatment_control_scores$treatment_scores
 control_scores <- treatment_control_scores$control_scores
 
-# # Standardized data_subset
-# cov_df_standardized = prepare_standardized_data(data_subset, data_config, treatment_col)
-# 
-# # FIX: Set rownames to actual IDs so match_on labels the matrix correctly
-# rownames(cov_df_standardized) <- as.character(cov_df_standardized[[data_config$ID_VAR]])
-# 
-# # Define the formula from your config
-# match_formula <- reformulate(data_config$ALL_COVARIATES, treatment_col)
-
-# Generate the standard Mahalanobis distance matrix
-# This is what Optimal, Cardinality (Step B), and osip will all use.
-
 cov_df_standardized <- prepare_standardized_data(data_subset, data_config, treatment_col)
 
-# FIX: Convert to data.frame first (tibbles don't support rownames), then set IDs as rownames
 cov_df_standardized <- as.data.frame(cov_df_standardized)
 rownames(cov_df_standardized) <- as.character(cov_df_standardized[[data_config$ID_VAR]])
 
@@ -306,8 +288,8 @@ match_formula <- reformulate(data_config$ALL_COVARIATES, treatment_col)
 dist_obj <- match_on(match_formula, data = cov_df_standardized, method = "mahalanobis")
 dist_matrix <- as.matrix(dist_obj)
 
-# DEBUG: verify alignment
-# Are treated unit IDs actually 1-181, or are they something else?
+
+# DEBUG print (to the output file): Are treated unit IDs actually in the correct range?
 treated_units <- cov_df_standardized[cov_df_standardized[[treatment_col]] == 1, ]
 cat("Treated IDs:", head(treated_units[[data_config$ID_VAR]], 10), "\n")
 cat("Treated row numbers:", head(as.integer(rownames(treated_units)), 10), "\n")
@@ -342,7 +324,8 @@ S_inv_rob <- robust_env$S_inv
 # 1. Start the timer
 start_time = start_timer() 
 
-# 1. Quintile Matching
+############## QUINTILE ###
+
 quintile_res <- execute_and_standardize(
   matching_func  = run_quintile, 
   label          = METHOD_LABELS[Methods$quintile],
@@ -353,7 +336,8 @@ quintile_res <- execute_and_standardize(
   base_dir = base_dir
 )
 
-# --- STEP 2: Refined Quintile (Dependent on Step 1) ---
+############## REFINED QUINTILE ###
+
 if (!is.null(quintile_res)) {
   refined_res <- execute_and_standardize(
     matching_func  = run_refined_quintile,
@@ -406,8 +390,7 @@ end_timer(start_time, "Optimal (1:1) matching")
 
 start_time = start_timer()
 
-
-################################ CARDINALITY MATCHING ##################
+############## CARDINALITY MATCHING ###
 
 # Main Script Execution
 cardinality_res <- execute_and_standardize(
@@ -449,6 +432,9 @@ if (dataset_name == datasets$IDHP) {
   cem_res <- run_cem(cov_df_standardized, data_config, treatment_col, match_formula)
 }
 
+
+############## GENETIC MATCHING ###
+
 # Main Script Execution
 genetic_res <- execute_and_standardize(
   matching_func  = run_genetic, 
@@ -481,7 +467,8 @@ if (!is.null(genetic_res)) {
   )
 }
 
-# 1. Run Full Matching
+############## FULL MATCHING ###
+
 full_matching_res <- run_full_match(
   cov_df = cov_df_standardized,
   treatment_col = treatment_col,
@@ -489,9 +476,9 @@ full_matching_res <- run_full_match(
   ps_col = "ps"
 )
 
-# --- 3. Create the 'Unmatched' Baseline ---
+############## UNMATCHED ###
+# This is the baseline for comparison 
 unmatched_res <- list(data_matched = cov_df_standardized %>% mutate(weights = 1))
-
 
 # Todo: Return later, currently analysis is on single delta value
 for (current_delta in delta_values) {
@@ -499,9 +486,6 @@ for (current_delta in delta_values) {
   cat(sprintf("\n\n>>> STARTING ANALYSIS FOR DELTA = %.3f <<<\n", current_delta))
   
   power <- sprintf("power_%g", dist_power)
-  
-  # TODO: Uncomment later, when dealing with multiple delta values again
-  # base_dir_delta <- file.path(base_dir, sprintf("delta_%g", current_delta), power)
   
   output_path = sprintf("%smain_%s_output_delta_%g_power_%g.txt", base_dir,
                         dataset_name, current_delta, dist_power)
@@ -513,14 +497,7 @@ for (current_delta in delta_values) {
   
   power <- sprintf("power_%g", dist_power)
   
-  # TODO: Uncomment later, when dealing with multiple delta values again
-  # base_dir_delta <- file.path(base_dir, sprintf("delta_%g", current_delta), power)
-  
   base_dir_delta <- file.path(base_dir, delta_path, power)
-  
-  # output_path = sprintf("%smain_%s_output.txt", base_dir, dataset_name)
-  
-  # base_dir_delta <- file.path(base_dir, power)
   
   # Create the directory if it doesn't exist
   if (!dir.exists(base_dir_delta)) {
@@ -530,26 +507,18 @@ for (current_delta in delta_values) {
   # 1. Create a fresh copy of global params
   iter_params <- params
   
-  # k_bound <- floor(1 / current_delta) + 4
-  
-  
   if (TRIM_TO_COMMON_SUPPORT) 
     k_bound <- get_max_k(current_delta, left_border, right_border)
+  
   # Use 0 and 1 as the left_border, right_border
   else
     k_bound <- get_max_k(current_delta, 0, 1)
-  
-  # 2. Update the SPECIFIC keys used by the DP and Heuristics
-  # iter_params$DELTA_DP <- current_delta
-  
-  # Formula: K_max = floor(1/Delta) + 5
-  # iter_params$K_DP <- k_bound
   
   cat(sprintf("[Params Update] DELTA_DP: %.3f | K_DP: %d\n", 
               current_delta, k_bound))
   
   
-  # 4. Now proceed to osip's Step 1 with borders
+  # Run run_osip_step1 with the relevant borders and other parameters.
   osip_res_step_1 <- run_osip_step1(cov_df_standardized, iter_params, 
                                       id_var, p_sorted, treatment_col,
                                       treatment_scores, control_scores, 
@@ -566,9 +535,6 @@ for (current_delta in delta_values) {
     # 1. Extract the specific message for the user
     error_info <- if (!is.null(osip_res_step_1$error)) {
       if (is.list(osip_res_step_1$error)) osip_res_step_1$error$error else as.character(osip_res_step_1$error)
-    } # else {
-    #   "DP failed to find a path to PS=1.0 (Infeasible under current constraints)"
-    # }
     
     # 2. Log the failure
     cat(sprintf("\n[!] SKIPPING Delta = %.3f: %s\n", current_delta, error_info))
@@ -638,7 +604,6 @@ for (current_delta in delta_values) {
     max_val_for_plot = max_val_for_plot,
     matching_non_1_1 = matching_non_1_1,
     dataset_name = dataset_name,
-    # analyze_flag = TRUE,
     analyze_flag = FALSE,
     run_step2 = TRUE
   )
@@ -751,10 +716,10 @@ for (current_delta in delta_values) {
   # ==========================================
   
   results_comparison <- complete_comparison(
-    results_df     = final_stats_comparison,          # The table containing ATE/P-values
+    results_df     = final_stats_comparison,  # The table containing ATE/P-values
     data           = cov_df_standardized,  # The original baseline
     data_config    = data_config,          # Contains ALL_COVARIATES and ID_VAR
-    treatment_col  = treatment_col,        # "treat"
+    treatment_col  = treatment_col,        
     outcome_var    = data_config$OUTCOME_VAR,
     
     # Pass the full result objects, NOT just the matched data
