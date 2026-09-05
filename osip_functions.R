@@ -1854,39 +1854,3 @@ get_max_k <- function(delta, p0, pk) {
   k_max <- 2 * ceiling_val
   return(k_max)
 }
-
-# save_optimal_partition_csv <- function(df, 
-#                                        # dataset_name, 
-#                                        delta_dp, 
-#                                        base_dir) {
-#   # 1. Validation check
-#   if (is.null(df) || nrow(df) == 0) {
-#     warning("⚠️ Cannot export CSV: Provided df is NULL or empty.")
-#     return(FALSE)
-#   }
-#   
-#   # 2. Clone input dataframe
-#   export_df <- df
-#   
-#   # 3. Round propensity score bounds to 4 decimal places (if present)
-#   if ("start_ps" %in% names(export_df)) export_df$start_ps <- round(export_df$start_ps, 4)
-#   if ("end_ps" %in% names(export_df))   export_df$end_ps   <- round(export_df$end_ps, 4)
-#   
-#   # 4. Remove unwanted columns
-#   cols_to_remove <- c("is_empty", "k_cost")
-#   export_df <- export_df[, !(names(export_df) %in% cols_to_remove), drop = FALSE]
-#   
-#   # 5. Direct column renaming (no quotes in header output)
-#   names(export_df)[names(export_df) == "start_ps"]  <- "start"
-#   names(export_df)[names(export_df) == "end_ps"]    <- "end"
-#   names(export_df)[names(export_df) == "n_treated"] <- "treated"
-#   names(export_df)[names(export_df) == "n_control"] <- "control"
-#   
-#   # 6. Construct destination path and save CSV
-#   csv_file_path <- file.path(base_dir, sprintf("step1_optimal_partition_delta_%.2f.csv", delta_dp))
-#   write.csv(export_df, file = csv_file_path, row.names = FALSE, quote = FALSE)
-#   
-#   cat(sprintf("✅ Cleaned optimal partition CSV successfully saved to:\n   -> %s\n\n", csv_file_path))
-#   
-#   return(TRUE)
-# }
