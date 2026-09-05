@@ -1,23 +1,37 @@
 # --- dataset_configs.R ---
+                       
+# In the following PARAMS list there are two fields you may want to edit: 
+
+# -----------------------------------------------------------------------------
+# 1. DELTA_VALUES: Specifies the delta threshold(s) for the OSIP framework.
+# -----------------------------------------------------------------------------
+# Option A: Single value
+# DELTA_VALUES <- c(0.20)
+
+# Option B: Regular sequence with constant step size
+# DELTA_VALUES <- seq(0.15, 0.20, by = 0.05)
+
+# Option C: Custom sequence with non-constant step sizes
+# DELTA_VALUES <- c(0.15, 0.17, 0.22, 0.24)
+
+# 2. SEARCHES_TO_USE: If you want to use only a subset of the heuristics you 
+# can specify that here. The default is using all three. 
+
+# All other fields are either technical (debug status etc.), or related to the
+# sampling possibility for larger dataset. We didn't use any of them for the 
+# datasets in the paper. MAX_VAL_FOR_PLOT is also a technical parameter than
+# can limit the maximum range in a plot if needed, no need to change it if 
+# there isn't a specific visualization issue. 
+
 
 PARAMS <- list(
-  # Choose your delta value\s. Can be a single value:
-  # DELTA_VALUES <- c(0.20)
-  # OR, multiple values:
-  # DELTA_VALUES <- seq(0.15, 0.20, by = 0.05)
-  
   DELTA_VALUES <- c(0.20),
+  SEARCHES_TO_USE = c("local_search", "enhanced_ls", "simulated_annealing"),
   SEED_IN <- 25,
-  S_inv = NULL,
   SAMPLE = c(TRUE,FALSE),
   SAMPLE_SIZE = 200,
   N_CONTROL_SAMPLE = 750,
-  WRITE_TO_FILE = c(TRUE,FALSE),
-  FILE_NAME = "debug_log.txt",
-  DEBUG_STATUS = c(TRUE,FALSE), 
-  SEARCHES_TO_USE = c("local_search", "enhanced_ls", "simulated_annealing"),
-  MAX_ITER = 50000, 
-  MAX_JUMP = 20,
+  DEBUG_STATUS = c(TRUE, FALSE),
   MAX_VAL_FOR_PLOT = NULL
   )
 

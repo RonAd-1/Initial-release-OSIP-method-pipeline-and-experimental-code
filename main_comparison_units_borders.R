@@ -252,8 +252,6 @@ S_inv <- solve(cov(X_all) + diag(1e-7, ncol(X_all)))
 
 if (is.null(S_inv)) stop(paste(metric, "matrix inversion failed."))
 
-params$S_inv <- S_inv
-
 # --- SETUP PHASE (Do this once per dataset) ---
 # 1. Standard Inputs
 X_std <- X_all 
