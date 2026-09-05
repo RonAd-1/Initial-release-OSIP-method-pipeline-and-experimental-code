@@ -27,7 +27,6 @@ library(purrr)
 library(sensitivitymult)
 library(optrefine)
 
-# 1. SETUP
 source("dataset_configs.R", echo = FALSE)
 source("osip_functions.R", echo = FALSE)
 source("heuristics_helping_functions.R", echo = FALSE)
@@ -36,14 +35,13 @@ source("genetic_matching.R", echo = FALSE)
 source("full_matching.R", echo = FALSE)
 source("cem.R", echo = FALSE)
 source("plots.R", echo = FALSE)
-# source("comparison_methods.R", echo = FALSE)
 source("original_distance_for_intervals.R", echo = FALSE)
 source("complete_comparison.R", echo = FALSE)
 source("heuristic_units.R", echo = FALSE)
 source("cochran_quintile.R", echo = FALSE)
 source("borders_helping_functions.R", echo = FALSE)
 
-# 1. Load your choice from config
+# Load your choice from dataset_configs.R file
 datasets <- DATASET_CHOICES
 params <- PARAMS
 delta_values <- params$DELTA_VALUES

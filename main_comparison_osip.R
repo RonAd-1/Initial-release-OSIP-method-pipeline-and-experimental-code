@@ -31,11 +31,10 @@ source("heuristics_helping_functions.R", echo = FALSE)
 source("plots.R", echo = FALSE)
 source("comparison_methods.R", echo = FALSE)
 source("original_distance_for_intervals.R", echo = FALSE)
-# source("complete_comparison.R", echo = FALSE)
 source("heuristic_units.R", echo = FALSE)
 source("borders_helping_functions.R", echo = FALSE)
 
-# Load your choice from config
+# Load your choice from dataset_configs.R file
 datasets <- DATASET_CHOICES
 params <- PARAMS
 delta_values <- params$DELTA_VALUES
