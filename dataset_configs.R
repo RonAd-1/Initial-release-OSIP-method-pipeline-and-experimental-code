@@ -17,11 +17,12 @@
 # 2. SEARCHES_TO_USE: If you want to use only a subset of the heuristics you 
 # can specify that here. The default is using all three. 
 
-# All other fields are either technical (debug status etc.), or related to the
-# sampling possibility for larger dataset. We didn't use any of them for the 
-# datasets in the paper. MAX_VAL_FOR_PLOT is also a technical parameter than
-# can limit the maximum range in a plot if needed, no need to change it if 
-# there isn't a specific visualization issue. 
+# All other fields are either technical parameters (e.g., DEBUG_STATUS) or 
+# settings related to downsampling larger datasets. 
+# None of these were used for the datasets in the paper. 
+# MAX_VAL_FOR_PLOT is a technical parameter that restricts 
+# the upper limit of a plot's axis you do not need to modify it unless you
+# encounter a specific visualization issue.
 
 
 PARAMS <- list(
