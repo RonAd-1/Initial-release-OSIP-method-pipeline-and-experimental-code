@@ -36,7 +36,7 @@ source("genetic_matching.R", echo = FALSE)
 source("full_matching.R", echo = FALSE)
 source("cem.R", echo = FALSE)
 source("plots.R", echo = FALSE)
-source("comparison_methods.R", echo = FALSE)
+# source("comparison_methods.R", echo = FALSE)
 source("original_distance_for_intervals.R", echo = FALSE)
 source("complete_comparison.R", echo = FALSE)
 source("heuristic_units.R", echo = FALSE)
@@ -46,9 +46,11 @@ source("borders_helping_functions.R", echo = FALSE)
 # 1. Load your choice from config
 datasets <- DATASET_CHOICES
 params <- PARAMS
+delta_values <- params$DELTA_VALUES
 methods <- Methods
 method_labels <- METHOD_LABELS
 matching_non_1_1 <- METHODS_NON_1_TO_1_MATCHING
+                    
 
 # Uncomment the relevant dataset
 
@@ -58,13 +60,6 @@ dataset_name <- DATASET_CHOICES$LINDNER
 # dataset_name <- DATASET_CHOICES$JOBS
 # dataset_name <- DATASET_CHOICES$IDHP
 # dataset_name <- DATASET_CHOICES$NHEFS
-
-# Choose your delta value\s. Can be a single value:
-# delta_values <- c(0.20)
-# OR, multiple values:
-# delta_values <- seq(0.15, 0.20, by = 0.05)
-
-delta_values <- c(0.20)
 
 # Container for results
 delta_sweep_results <- list()
@@ -274,7 +269,7 @@ S_inv_rob <- robust_env$S_inv
 # 1. Start the timer
 start_time = start_timer() 
 
-############## QUINTILE ###
+############## QUINTILE MATCHING ###
 
 quintile_res <- execute_and_standardize(
   matching_func  = run_quintile, 
@@ -286,7 +281,7 @@ quintile_res <- execute_and_standardize(
   base_dir = base_dir
 )
 
-############## REFINED QUINTILE ###
+############## REFINED QUINTILE MATCHING ###
 
 if (!is.null(quintile_res)) {
   refined_res <- execute_and_standardize(

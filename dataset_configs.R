@@ -1,7 +1,12 @@
 # --- dataset_configs.R ---
 
 PARAMS <- list(
-  DELTA_DP = 0.2,
+  # Choose your delta value\s. Can be a single value:
+  # DELTA_VALUES <- c(0.20)
+  # OR, multiple values:
+  # DELTA_VALUES <- seq(0.15, 0.20, by = 0.05)
+  
+  DELTA_VALUES <- c(0.20),
   SEED_IN <- 25,
   S_inv = NULL,
   SAMPLE = c(TRUE,FALSE),

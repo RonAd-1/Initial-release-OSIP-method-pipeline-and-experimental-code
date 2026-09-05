@@ -904,9 +904,6 @@ run_optimal_1_1 <- function(data,
 run_cardinality <- function(data, config, treatment_col, label = "Cardinality (1:1)", ...) {
   cat("\n--- Running Cardinality (IP Solver) ---\n")
   
-  # Debug
-  # browser()
-  
   # 1. Define formula based on explicit treatment_col
   match_formula <- reformulate(termlabels = config$ALL_COVARIATES, response = treatment_col)
   
@@ -954,12 +951,8 @@ run_genetic <- function(data,
                         max.generations = 10, 
                         seed = 123, 
                         ...) {
-  # Debug
-  # browser()
-  
+
   cat(paste0("\n--- Running ", label, " (Standardized Distances) ---\n"))
-  
-  
   
   start_time <- Sys.time()
   set.seed(seed)

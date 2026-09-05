@@ -31,13 +31,14 @@ source("heuristics_helping_functions.R", echo = FALSE)
 source("plots.R", echo = FALSE)
 source("comparison_methods.R", echo = FALSE)
 source("original_distance_for_intervals.R", echo = FALSE)
-source("complete_comparison.R", echo = FALSE)
+# source("complete_comparison.R", echo = FALSE)
 source("heuristic_units.R", echo = FALSE)
 source("borders_helping_functions.R", echo = FALSE)
 
 # Load your choice from config
 datasets <- DATASET_CHOICES
 params <- PARAMS
+delta_values <- params$DELTA_VALUES
 methods <- Methods
 method_labels <- METHOD_LABELS
 matching_non_1_1 <- METHODS_NON_1_TO_1_MATCHING
@@ -48,9 +49,6 @@ dataset_name <- DATASET_CHOICES$LINDNER
 # dataset_name <- DATASET_CHOICES$JOBS
 # dataset_name <- DATASET_CHOICES$IDHP
 # dataset_name <- DATASET_CHOICES$NHEFS
-
-delta_values <- c(0.175)
-# delta_values <- seq(0.15, 0.20, by = 0.05)
 
 # Container for results
 delta_sweep_results <- list()
@@ -519,9 +517,6 @@ for (current_delta in delta_values) {
   print("\n\n*******************************************\n\n")
   print("Results after complete_comparison and sensitivity analysis:\n")
   print(results_comparison)
-  
-  #debug 
-  # browser()
   
   # 1. Start with the ATE results (The "Anchor" table)
   final_results <- final_stats_comparison %>%

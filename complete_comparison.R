@@ -23,9 +23,6 @@ get_map_stats <- function(map_obj, method_name) {
 
 calculate_method_row_stats <- function(df, label, matching_non_1_1, data_config, treatment_col, gamma_val = NA) {
   
-  # Debug
-  # browser()
-  
   # Use NAMED arguments to avoid positional confusion
   row <- calculate_and_format_ate(
     matching_res  = list(data_matched = df), 
@@ -35,8 +32,6 @@ calculate_method_row_stats <- function(df, label, matching_non_1_1, data_config,
     treatment_col = treatment_col, # Ensure this variable is available in scope
     gamma_val     = gamma_val      # Now R knows exactly what this is
   )
-  
-  # browser()
   
   # Ensure sample sizes in the table are correct
   row$n_treated <- sum(df[[treatment_col]] == 1)
@@ -93,34 +88,6 @@ generate_balance_stats <- function(matched_df, covariates, treatment_col) {
   return(get_balance_metrics(bal_obj))
 }
 
-
-# --- UTILITY 2: Standardized Balance Generator ---
-# This replaces the 'create_bal' and 'add_metric' logic
-# generate_balance_stats <- function(matched_df, covariates, treatment_col) {
-#   # 1. Identify active covariates (those with variation)
-#   has_variation <- sapply(covariates, function(cn) {
-#     val_count <- length(unique(na.omit(matched_df[[cn]])))
-#     return(val_count > 1)
-#   })
-#   active_covariates <- covariates[has_variation]
-#   
-#   # Extract weights safely (NULL if not found)
-#   weights_vec <- if ("weights" %in% names(matched_df)) matched_df$weights else NULL
-#   
-#   # 2. Run bal.tab with weights parameter
-#   bal_obj <- bal.tab(
-#     x = matched_df[, active_covariates, drop = FALSE], 
-#     treat = matched_df[[treatment_col]],
-#     weights = weights_vec,                # <--- CRITICAL FIX
-#     stats = c("m", "ks"), 
-#     s.d.denom = "pooled"
-#   )
-#   
-#   # 3. Get the 1-row dataframe of metrics
-#   return(get_balance_metrics(bal_obj))
-# }
-
-
 create_bal_object <- function(res_obj, covariates, treatment_col) {
   if (is.null(res_obj)) return(NULL)
   
@@ -144,32 +111,6 @@ create_bal_object <- function(res_obj, covariates, treatment_col) {
     )
   )
 }
-
-# --- MOVE THIS TO GLOBAL SCOPE ---
-# This is the "Engine" that creates the object needed for Love Plots
-# create_bal_object <- function(res_obj, covariates, treatment_col) {
-#   # 1. Safety check: if method was not run, return NULL
-#   if (is.null(res_obj)) return(NULL)
-#   
-#   # 2. Identify the data (works if res_obj is a list with $data_matched or the df itself)
-#   matched_df <- if(is.data.frame(res_obj)) res_obj else res_obj$data_matched
-#   
-#   # 3. Variation check to prevent "contrasts" error
-#   has_variation <- sapply(covariates, function(cn) {
-#     length(unique(na.omit(matched_df[[cn]]))) > 1
-#   })
-#   active_covs <- covariates[has_variation]
-#   
-#   # 4. Generate the actual bal.tab object
-#   return(
-#     bal.tab(
-#       x = matched_df[, active_covs, drop = FALSE],
-#       treat = matched_df[[treatment_col]],
-#       stats = c("m", "ks"), 
-#       s.d.denom = "pooled"
-#     )
-#   )
-# }
 
 # ==========================================
 # 3. THE MAIN WRAPPER: compare_methods
@@ -278,9 +219,6 @@ compare_methods <- function(data,
     r_osip_step1_strict <- get_row(osip_step1_strict_res$data_matched, method_labels[methods$osip_step1_strict], osip_step1_strict_res$shifting_point)
     res_list <- append(res_list, list(r_osip_step1_strict))
   }
-  
-  # Debug
-  # browser()
   
   # --- OSIP STEP 2 STRICT---
   
@@ -804,148 +742,177 @@ create_love_plot <- function(bal_list, delta_dp, dataset_name, base_dir, method_
   return(p_love)
 }
 
-# create_love_plot <- function(bal_list, delta_dp, dataset_name, base_dir, method_labels) {
-#   
-#   love_data <- data.frame()
-#   
-#   for (method_key in names(bal_list)) {
-#     bal_obj <- bal_list[[method_key]]
-#     if (is.null(bal_obj)) next
-#     
-#     display_name <- if (method_key %in% names(method_labels)) method_labels[[method_key]] else method_key
-#     stats <- as.data.frame(bal_obj$Balance)
-#     smd_vector <- dplyr::coalesce(stats[["Diff.Adj"]], stats[["Diff.Un"]])
-#     
-#     # debug
-#     # browser()
-#     
-#     # 1. Extract "strict" or "robust" (case-insensitive)
-#     dist_tag <- if (grepl("robust", method_key, ignore.case = TRUE)) {
-#       "robust"
-#     } else if (grepl("strict", method_key, ignore.case = TRUE)) {
-#       "strict"
-#     } else {
-#       "" # Default fallback if neither keyword is found
-#     }
-# 
-#     # 2. Build the tag string for the filename
-#     tag_str <- if (nchar(dist_tag) > 0) paste0("_", dist_tag) else ""
-# 
-#     # Extract type ("strict" or "robust") in lower case
-#     type_str <- tolower(dist_tag)  # e.g., "strict" or "robust"
-#     
-#     # Format display name as "OSIP(strict, 0.15)"
-#     method_display_name <- sprintf("OSIP(%s, %.2f)", type_str, delta_dp)
-#     
-#     # Update df with the clean method display name
-#     df <- data.frame(
-#       Method    = method_display_name,
-#       Covariate = rownames(stats),
-#       SMD       = round(as.numeric(smd_vector), 4),
-#       stringsAsFactors = FALSE
-#     )
-#     
-#     # df <- data.frame(
-#     #   Method = display_name,
-#     #   Covariate = rownames(stats),
-#     #   SMD = round(as.numeric(smd_vector), 4),
-#     #   stringsAsFactors = FALSE
-#     # )
-#     # Debug
-#     # browser()
-#     # 
-#     # # 1. Extract "strict" or "robust" (case-insensitive)
-#     # dist_tag <- if (grepl("robust", method_key, ignore.case = TRUE)) {
-#     #   "robust"
-#     # } else if (grepl("strict", method_key, ignore.case = TRUE)) {
-#     #   "strict"
-#     # } else {
-#     #   "" # Default fallback if neither keyword is found
-#     # }
-#     # 
-#     # # 2. Build the tag string for the filename
-#     # tag_str <- if (nchar(dist_tag) > 0) paste0("_", dist_tag) else ""
-#     # 
-#     # # 3. Construct the filename dynamically
-#     # file_name <- sprintf("covariate_balance%s_delta_%.2f.csv", tag_str, delta_dp)
-#     # full_path <- file.path(base_dir, file_name)
-#     # 
-#     # 
-#     # 
-#     # # Export to CSV
-#     # write.csv(df, file = full_path, row.names = FALSE)
-#     # 
-#     # # Debug
-#     # browser()
-#     
-#     love_data <- rbind(love_data, df)
-#   }
-#   
-#   # Pivot long format to wide format
-#   wide_balance_df <- love_data %>%
-#     pivot_wider(
-#       names_from = Method,    # Method names (e.g., OSIP_Step2_Strict) become column headers
-#       values_from = SMD       # SMD values fill the grid
-#     )
-#   
-#   # # 3. Construct the filename dynamically
-#   file_name <- sprintf("love_plot_table_delta_%.2f.csv", delta_dp)
-#   full_path <- file.path(base_dir, file_name)
-# 
-#   # Export to CSV
-#   write.csv(wide_balance_df, file = full_path, row.names = FALSE)
-#   
-#   love_data$Covariate <- gsub("[_\\.]\\d.*", "", love_data$Covariate)
-#   love_data <- love_data[!love_data$Covariate %in% c("distance", "prop.score"), ]
-#   
-#   all_methods <- unique(love_data$Method)
-#   love_data$Is_OSIP <- grepl("OSIP", love_data$Method)
-#   
-#   # --- 1. Distinct Color Mapping ---
-#   # Creating a baseline palette and overriding key methods
-#   standard_palette <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(length(all_methods))
-#   custom_colors <- setNames(standard_palette, all_methods)
-#   
-#   custom_colors["OSIP_Step2_Strict"]          <- "#000000" # Black
-#   custom_colors["OSIP_Step2_Strict_Balanced"] <- "#0044BB" # Blue
-#   custom_colors["OSIP_Step2_Robust"]          <- "#FF0000" # Red
-#   custom_colors["OSIP_Step2_Robust_Balanced"] <- "#009E73" # Bluish Green
-#   custom_colors["Unmatched"]                  <- "#999999" # Gray
-#   
-#   # --- 2. Shape Mapping ---
-#   shape_values <- setNames(rep(16, length(all_methods)), all_methods)
-#   shape_values["OSIP_Step2_Strict"]          <- 17 # Triangle
-#   shape_values["OSIP_Step2_Strict_Balanced"] <- 18 # Diamond
-#   shape_values["OSIP_Step2_Robust"]          <- 15 # Square
-#   shape_values["OSIP_Step2_Robust_Balanced"] <- 8  # Star
-#   shape_values["Unmatched"]                  <- 1  # Hollow Circle
-#   
-#   p_love <- ggplot(love_data, aes(x = abs(SMD), y = Covariate, color = Method, shape = Method)) +
-#     geom_vline(xintercept = c(0, 0.1), linetype = c("solid", "dashed"), color = "gray") +
-#     geom_point(aes(size = Is_OSIP), alpha = 0.8, position = position_dodge(width = 0.5)) +
-#     theme_minimal() +
-#     labs(title = paste("Covariate Balance -", dataset_name),
-#          subtitle = paste("Delta =", delta_dp),
-#          x = "Absolute Standardized Mean Difference (ASMD)",
-#          y = "",
-#          color = "Method", 
-#          shape = "Method") +
-#     scale_color_manual(values = custom_colors, breaks = all_methods) +
-#     scale_shape_manual(values = shape_values, breaks = all_methods) +
-#     scale_size_manual(values = c("TRUE" = 4.5, "FALSE" = 2.5), guide = "none") +
-#     theme(
-#       legend.position = "right",
-#       legend.title = element_text(face = "bold"),
-#       legend.text = element_text(size = 10)
-#     ) +
-#     
-#     guides(
-#       color = guide_legend(override.aes = list(size = 5)),
-#       shape = "legend" 
-#     )
-#   
-#   file_name <- sprintf("love_plot_%s_delta_%.2f.png", dataset_name, delta_dp)
-#   ggsave(file.path(base_dir, file_name), p_love, width = 12, height = 8, dpi = 300)
-# 
-#   return(p_love)
-# }
+calculate_rosenbaum_gamma <- function(match_map, data_subset, outcome_var, gamma_range = seq(1, 5, by = 0.5)) {
+  
+  # 1. Prepare the outcome vector (ensuring alignment with the map IDs)
+  outcomes <- data_subset[[outcome_var]]
+  names(outcomes) <- as.character(data_subset$id)
+  
+  # 2. Create the Pair-Difference Matrix (Required for Rosenbaum)
+  # Rows = Matched Sets, Col 1 = Treated Outcome, Col 2 = Control Outcome
+  y_matrix <- matrix(NA, nrow = nrow(match_map), ncol = 2)
+  
+  y_matrix[, 1] <- outcomes[as.character(match_map$treated_id)]
+  y_matrix[, 2] <- outcomes[as.character(match_map$control_id)]
+  
+  # Remove any rows with NAs (unmatched units)
+  y_matrix <- y_matrix[complete.cases(y_matrix), ]
+  
+  # Check the average difference. If it's negative, flip the matrix 
+  # so we are testing the magnitude of the effect correctly.
+  avg_diff <- mean(y_matrix[, 1] - y_matrix[, 2])
+  if (avg_diff < 0) {
+    y_matrix <- -y_matrix
+  }
+  # ----------------
+  
+  # 3. Iterate through Gamma values
+  sens_results <- data.frame(Gamma = gamma_range, P_Value_Bound = NA)
+  
+  for(i in 1:nrow(sens_results)) {
+    g <- sens_results$Gamma[i]
+    # senmv calculates the upper bound p-value for a given Gamma
+    res <- senmv(y_matrix, gamma = g, method = "h")
+    # Explicitly grab only the p-value to avoid the length warning
+    sens_results$P_Value_Bound[i] <- res$pval
+  }
+  
+  # Recommended Logic Flow
+  # --- Logic Flow ---
+  sig_indices <- which(sens_results$P_Value_Bound <= 0.05)
+  
+  if (length(sig_indices) == 0) {
+    # Scenario A: Not significant at Gamma = 1.0
+    threshold_gamma <- 1.0
+    exact_threshold <- 1.0  # Initialize here so it exists for the return list
+  } else {
+    # Scenario B: Significant! Now find the exact interpolated point
+    exact_val <- estimate_gamma_threshold(sens_results)
+    
+    # Fallback logic
+    exact_threshold <- if (!is.na(exact_val)) exact_val else max(sens_results$Gamma)
+    threshold_gamma <- exact_threshold # You can use the same value or the discrete one
+  }
+  
+  # Now both variables are guaranteed to exist
+  return(list(
+    results_table = sens_results,
+    threshold = threshold_gamma,
+    exact_threshold = exact_threshold
+  ))
+}
+
+estimate_gamma_threshold <- function(results, alpha = 0.05) {
+  
+  # Find first p-value above alpha
+  idx <- which(results$P_Value_Bound > alpha)[1]
+  
+  if (is.na(idx) || idx == 1) {
+    return(NA)
+  }
+  
+  g1 <- results$Gamma[idx - 1]
+  g2 <- results$Gamma[idx]
+  p1 <- results$P_Value_Bound[idx - 1]
+  p2 <- results$P_Value_Bound[idx]
+  
+  # Linear interpolation
+  g_star <- g1 + (alpha - p1) * (g2 - g1) / (p2 - p1)
+  
+  return(g_star)
+}
+
+get_match_map <- function(m_input, dist_mat) {
+  
+  # CASE 1: Standard MatchIt object
+  if (inherits(m_input, "matchit")) {
+    matches <- m_input$match.matrix
+    map <- data.frame(
+      treated_id = as.character(rownames(matches)),
+      control_id = as.character(matches[, 1]),
+      stringsAsFactors = FALSE
+    ) %>% dplyr::filter(!is.na(control_id))
+    
+  } else if (inherits(m_input, "optmatch")) {
+    # CASE 2: The 'optmatch' factor vector
+    map <- data.frame(
+      id = as.character(names(m_input)),
+      group = as.character(m_input),
+      stringsAsFactors = FALSE
+    ) %>%
+      dplyr::filter(!is.na(group)) %>%
+      mutate(is_treated = id %in% rownames(dist_mat)) %>%
+      group_by(group) %>%
+      summarize(
+        treated_id = id[is_treated == TRUE][1],
+        control_id = id[is_treated == FALSE][1],
+        .groups = 'drop'
+      ) %>%
+      dplyr::filter(!is.na(treated_id) & !is.na(control_id))
+    
+  } else {
+    # CASE 3: Already a dataframe (Levin)
+    map <- as.data.frame(m_input)
+    map$treated_id <- as.character(map$treated_id)
+    map$control_id <- as.character(map$control_id)
+  }
+  
+  # --- UPDATED SYMMETRIC LOOKUP STARTS HERE ---
+  # We use a character-safe, direction-agnostic check to handle 'flipped' IDs
+  map$cost <- mapply(function(t, c) {
+    t_chr <- as.character(t)
+    c_chr <- as.character(c)
+    
+    # 1. Try Standard Orientation: Treated in rows, Control in columns
+    if (t_chr %in% rownames(dist_mat) && c_chr %in% colnames(dist_mat)) {
+      return(dist_mat[t_chr, c_chr])
+    } 
+    
+    # 2. Try Flipped Orientation: Control in rows, Treated in columns
+    # This solves the Jobs dataset issue where IDs like "1" are columns in the matrix
+    # but appear in the treated_id column of the quintile map.
+    else if (c_chr %in% rownames(dist_mat) && t_chr %in% colnames(dist_mat)) {
+      return(dist_mat[c_chr, t_chr])
+    } 
+    
+    # 3. Fallback
+    else { 
+      return(NA) 
+    }
+  }, map$treated_id, map$control_id)
+  # --- UPDATED SYMMETRIC LOOKUP ENDS HERE ---
+  
+  return(as.data.frame(map))
+}
+
+print_efficiency_rankings <- function(efficiency_vector) {
+  cat("\n--- Efficiency Rankings (Most Efficient to Least) ---\n")
+  
+  # 1. Create a data frame for easier manipulation
+  eff_df <- data.frame(
+    Method = names(efficiency_vector),
+    Efficiency = as.numeric(efficiency_vector)
+  )
+  
+  # 2. Rank: Higher is better (usually Efficiency = 1/Variance)
+  # If your Efficiency metric is "Higher = Better", sort descending
+  eff_df <- eff_df[order(-eff_df$Efficiency), ]
+  
+  # 3. Add a "Ratio to Best" column to make differences intuitive
+  # This shows how much efficiency you lose compared to the top performer
+  best_val <- eff_df$Efficiency[1]
+  eff_df$Ratio_to_Best <- eff_df$Efficiency / best_val
+  
+  # 4. Format for printing
+  eff_df$Efficiency_Fixed <- format(eff_df$Efficiency, scientific = FALSE, digits = 8)
+  eff_df$Rank <- 1:nrow(eff_df)
+  
+  # 5. Final Display
+  for(i in 1:nrow(eff_df)) {
+    cat(sprintf("%d. %-15s | Value: %s | Score: %.2f%%\n", 
+                eff_df$Rank[i], 
+                eff_df$Method[i], 
+                eff_df$Efficiency_Fixed[i],
+                eff_df$Ratio_to_Best[i] * 100))
+  }
+}
