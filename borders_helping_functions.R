@@ -17,7 +17,6 @@ calculate_distance_from_dp_intervals_local <- function(intervals, cov_df,
     t_indices <- as.integer(t_indices[!is.na(t_indices)])
     c_indices <- as.integer(c_indices[!is.na(c_indices)])
     
-    # t_indices_final <- t_indices[!(as.character(cov_df[[id_var]][t_indices]) %in% fixed_redundant_unit_ids)]
     if (length(t_indices) == 0 || length(c_indices) == 0) next
     
     X_t <- X_working[t_indices, , drop = FALSE]
@@ -33,126 +32,6 @@ calculate_distance_from_dp_intervals_local <- function(intervals, cov_df,
   }
   return(total_cost)
 }
-
-
-# perform_osip_matching_locally <- function(data_subset, final_intervals, 
-#                                            params, data_config, treatment_col, distance_metric) {
-#   
-#   cat("\n--- Performing Final Bin-Exact Matching ---\n")
-#   #treatment_col <- data_config$TREATMENT_VAR
-#   
-#   # 1. Create PS Bins
-#   
-#   # 1. Initialize the bin column
-#   data_subset$ps_bin_final <- NA
-#   
-#   # Extract the list of IDs from the attributes of final_intervals
-#   # These are the attributes you showed in the screenshot
-#   t_ids_list <- attr(final_intervals, "treatment_unit_ids")
-#   c_ids_list <- attr(final_intervals, "control_unit_ids")
-#   
-#   # 2. Map IDs to Bins for both Treated and Control
-#   for (bin_idx in seq_along(t_ids_list)) {
-#     bin_label <- paste0("Bin", bin_idx)
-#     
-#     # Assign bin to treated units in this interval
-#     t_ids <- t_ids_list[[bin_idx]]
-#     data_subset$ps_bin_final[data_subset$id %in% t_ids] <- bin_label
-#     
-#     # Assign bin to control units in this interval
-#     c_ids <- c_ids_list[[bin_idx]]
-#     data_subset$ps_bin_final[data_subset$id %in% c_ids] <- bin_label
-#   }
-#   
-#   # 3. Clean up orphans (if any units weren't captured by the DP intervals)
-#   data_subset <- data_subset[!is.na(data_subset$ps_bin_final), ]
-#   
-#   # 2. Prepare Data and Run MatchIt
-#   data_subset[[treatment_col]] <- factor(data_subset[[treatment_col]], levels = c(0, 1))
-#   matching_formula <- as.formula(paste(treatment_col, "~", paste(data_config$ALL_COVARIATES, collapse = " + ")))
-#   
-#   m_out <- matchit(
-#     matching_formula,
-#     data = data_subset,
-#     method = "optimal",
-#     distance = distance_metric, 
-#     exact = "ps_bin_final",
-#     ratio = 1
-#   )
-#   
-#   # --- NEW EXTRACTION LOGIC STARTS HERE ---
-#   # This section creates the 'match_map' that was missing/empty
-#   mm <- m_out$match.matrix
-#   
-#   # Build map with character conversion to handle LINDER (ints) and Mixtape (chars)
-#   match_map_osip <- data.frame(
-#     treated_id = as.character(rownames(mm)),
-#     control_id = as.character(mm[, 1]),
-#     stringsAsFactors = FALSE
-#   ) %>% 
-#     dplyr::filter(!is.na(control_id))
-#   
-#   # Create a lookup for PS values using character keys
-#   ps_lookup <- data_subset$ps
-#   names(ps_lookup) <- as.character(data_subset$id)
-#   
-#   # Attach PS and calculate cost (distance)
-#   match_map_osip <- match_map_osip %>%
-#     mutate(
-#       ps_t = ps_lookup[treated_id],
-#       ps_c = ps_lookup[control_id],
-#       cost = abs(ps_t - ps_c) 
-#     )
-#   # --- NEW EXTRACTION LOGIC ENDS HERE ---
-#   
-#   # 4. Extract matched data for ATE calculations
-#   data_matched <- match.data(m_out)
-#   
-#   return(list(
-#     m_out = m_out,
-#     data_matched = data_matched,
-#     match_map = match_map_osip, # Returning this ensures plots have data
-#     method_used = "Optimal (Exact Bin-Matching)"
-#   ))
-# }
-
-# ==============================================================================
-# create_osip_matching()
-#
-# Performs bin-exact matching on a given osip (Optimal Interval 
-# Stratified Partition) solution and computes all downstream diagnostics.
-# Designed to be called twice per delta: once after Step 1 (DP baseline)
-# and once after Step 2 (optimized intervals), enabling direct comparison
-# of how much Step 2 improves the final matched sample.
-#
-# Args:
-#   final_intervals  : data.frame of intervals (output of Step 1 or Step 2)
-#   cov_df           : unstandardized covariate data (used for matching)
-#   cov_df_standardized : standardized covariate data (used for Rosenbaum)
-#   dist_matrix      : pre-computed Mahalanobis distance matrix
-#   params           : parameter list (must contain delta_dp etc.)
-#   data_config      : dataset config list (TREATMENT_VAR, OUTCOME_VAR, etc.)
-#   treatment_col    : string, name of treatment column
-#   dist_type        : string passed to perform_osip_matching 
-#                      (e.g., "strict" or "robust")
-#   dist_type_name   : string, short label for plots (e.g., "Strict", "Robust")
-#   metric_label     : string, full display label (e.g., "osip Strict")
-#   current_delta    : numeric, current delta value (for filenames and titles)
-#   base_dir         : string, output directory path
-#   outcome_var      : string, name of outcome variable
-#   step_label       : string, "Step1_Baseline" or "Step2_Optimized" 
-#                      — used in filenames to distinguish the two calls
-#
-# Returns:
-#   A named list containing:
-#     $data_matched   : matched data.frame with match_id column
-#     $match_map      : data.frame of treated/control pairs with Mahal costs
-#     $m_out          : raw MatchIt object (for bal.tab, etc.)
-#     $sens           : Rosenbaum sensitivity result (threshold, exact_threshold,
-#                       results_table)
-#     $bal_obj        : cobalt bal.tab balance object
-#     $dist_plot      : ggplot distance distribution plot object
-# ==============================================================================
 
 create_osip_matching <- function(final_intervals,
                                  cov_df,
@@ -418,10 +297,7 @@ run_osip_pipeline <- function(metric_label, robust_flag, dp_intervals, cov_df,
   # ------------------------------------------------------------------
   # Matching + diagnostics on whichever intervals won
   # ------------------------------------------------------------------
-  #Debug
-  # cat("base_dir is ", base_dir)
-  # browser()
-  
+ 
   osip_matching <- create_osip_matching(
     final_intervals     = best_intervals,
     cov_df              = cov_df,
@@ -448,58 +324,6 @@ run_osip_pipeline <- function(metric_label, robust_flag, dp_intervals, cov_df,
     best_method    = best_method_name,
     best_intervals = best_intervals
   ))
-}
-
-plot_ps_distribution_trimmed <- function(df, dataset_name, treatment_col, datasets, base_dir, title_suffix = "", is_trimmed = FALSE) {
-  
-  df$treat_label <- ifelse(df[[treatment_col]] == 1, "Treated", "Control")
-  df$treat_jitter <- jitter(as.numeric(df[[treatment_col]]), amount = 0.05)
-  
-  # Determine Plot Boundaries
-  # If trimmed, we zoom into the actual data range plus a small buffer
-  if (is_trimmed) {
-    x_min <- min(df$ps, na.rm = TRUE) - 0.02
-    x_max <- max(df$ps, na.rm = TRUE) + 0.02
-    file_tag <- "trimmed"
-  } else {
-    x_min <- 0
-    x_max <- 1.0
-    file_tag <- "full"
-  }
-  
-  # 1. GGPLOT Version (for Saving)
-  p <- ggplot(df, aes(x = ps, y = treat_jitter, color = treat_label)) +
-    geom_point(alpha = 0.7, size = 2) +
-    scale_color_manual(values = c("Control" = "blue", "Treated" = "red")) +
-    labs(
-      title = paste("PS Distribution:", dataset_name, title_suffix),
-      x = "Propensity Score",
-      y = "",
-      color = "Group"
-    ) +
-    theme_minimal() +
-    coord_cartesian(xlim = c(x_min, x_max)) + # Use coord_cartesian to zoom without dropping data
-    theme(
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      panel.grid.major.y = element_blank(),
-      panel.grid.minor.y = element_blank()
-    )
-  
-  # Save with a unique name so you don't overwrite the original
-  storing_path <- sprintf("%sps_distribution_%s_%s.png", base_dir, dataset_name, file_tag)
-  ggsave(storing_path, plot = p, width = 10, height = 6, dpi = 300)
-  
-  # 2. PLOTLY Version (for Interactive Display)
-  fig <- plot_ly(data = df, x = ~ps, y = ~treat_jitter, type = "scatter", mode = "markers",
-                 color = ~treat_label, colors = c("blue", "red")) %>%
-    layout(
-      title = paste("PS Distribution:", dataset_name, title_suffix),
-      xaxis = list(title = "Propensity Score", range = c(x_min, x_max)),
-      yaxis = list(title = "", showticklabels = FALSE)
-    )
-  
-  print(fig)
 }
 
 execute_and_standardize <- function(matching_func, 
@@ -826,9 +650,6 @@ run_refined_quintile <- function(data, config, treatment_col, label, quintile_re
   # Fast lookup using matrix coordinates [row, col]
   idx <- as.matrix(match_map_refined[, c("treated_id", "control_id")])
   
-  #Debug
-  # browser()
-  
   match_map_refined$cost <- dist_matrix[idx]
   
   # 6. Extract Matched Subset
@@ -1032,28 +853,6 @@ run_genetic <- function(data,
     method       = label
   ))
 }
-
-# generate_forensic_plot <- function(original_data, matched_data, var_name, treatment_var = "treated") {
-#   
-#   # 1. Plot the Original (Unmatched) Distribution
-#   p_orig <- analyze_covariate_distribution(original_data, var_name, treatment_var) +
-#     labs(title = paste("Original Distribution:", var_name),
-#          subtitle = "Pre-matching (Selection Bias visible)")
-#   
-#   # 2. Plot the Matched Distribution
-#   p_match <- analyze_covariate_distribution(matched_data, var_name, treatment_var) +
-#     labs(title = paste("Matched Distribution:", var_name),
-#          subtitle = "Post-OSIP (Step 2 Balanced)")
-#   
-#   # Using 'gridExtra' to put them side-by-side for the Appendix
-#   combined_plot <- gridExtra::arrangeGrob(p_orig, p_match, ncol = 2)
-#   
-#   # Save with a name that clearly identifies it as a diagnostic
-#   file_name <- sprintf("Forensic_Audit_%s.png", var_name)
-#   ggsave(file.path(base_dir, file_name), combined_plot, width = 12, height = 5)
-#   
-#   return(combined_plot)
-# }
 
 get_imbalanced_covariates <- function(bal_obj, threshold = 0.1) {
   if (is.null(bal_obj)) return(character(0))
@@ -1380,229 +1179,6 @@ generate_control_integrity_table <- function(original_data, matched_list, cov_na
   
   return(final_df)
 }
-
-# generate_control_integrity_table_new <- function(original_data, matched_list, cov_name, 
-#                                              n_bins = 10, treatment_col = "treat", 
-#                                              base_dir) {
-# 
-#   # 1. Isolate the 'Source of Truth' Controls (The 249 pool)
-#   pool_ctrls <- original_data %>% dplyr::filter(!!sym(treatment_col) == 0)
-#   pool_vals <- pool_ctrls[[cov_name]]
-#   
-#   # 2. Define the breaks using ONLY the pool (exclude 0s for the sequence)
-#   non_zero_pool <- pool_vals[pool_vals > 0.01]
-#   
-#   # Ensure we have data to break; otherwise use a simple sequence
-#   if(length(non_zero_pool) > 0) {
-#     core_breaks <- seq(min(non_zero_pool, na.rm=T), max(non_zero_pool, na.rm=T), length.out = n_bins)
-#   } else {
-#     core_breaks <- seq(0, 1000, length.out = n_bins)
-#   }
-#   
-#   # 3. Create Labels
-#   format_v <- function(x) if(x >= 1000) paste0(round(x/1000, 1), "k") else round(x, 1)
-#   cell_labels <- c("$0")
-#   for(i in 1:(length(core_breaks)-1)) {
-#     cell_labels <- c(cell_labels, paste0("$", format_v(core_breaks[i]), "-", format_v(core_breaks[i+1])))
-#   }
-#   cell_labels <- c(cell_labels, paste0("$", format_v(tail(core_breaks, 1)), "+"))
-#   
-#   # 4. Counting Helper
-#   get_counts <- function(df, label_name) {
-#     target_ctrls <- df %>% dplyr::filter(!!sym(treatment_col) == 0)
-#     n_total <- nrow(target_ctrls)
-#     if(n_total == 0) return(NULL)
-#     
-#     vals <- target_ctrls[[cov_name]]
-#     
-#     # Logic: 1 for $0, then find where it sits in the core_breaks
-#     # We use findInterval and then cap it to the length of cell_labels
-#     indices <- ifelse(vals <= 0.01, 1, findInterval(vals, core_breaks) + 1)
-#     indices <- pmin(indices, length(cell_labels))
-#     
-#     # Use factor to ensure we get a row for every bin, even if count is 0
-#     res <- as.data.frame(table(factor(indices, levels = 1:length(cell_labels))))
-#     res$bin <- cell_labels
-#     res <- res[, c("bin", "Freq")]
-#     
-#     colnames(res) <- c("bin", paste0(label_name, "_Count"))
-#     res[[paste0(label_name, "_Pct")]] <- paste0(round((res[[2]] / n_total) * 100, 2), "%")
-#     return(res)
-#   }
-#   
-#   # 5. Build the final Table
-#   final_df <- get_counts(original_data, "Original_Pool")
-#   
-#   for (m_name in names(matched_list)) {
-#     m_stats <- get_counts(matched_list[[m_name]], m_name)
-#     if(!is.null(m_stats)) {
-#       final_df <- left_join(final_df, m_stats, by = "bin")
-#     }
-#   }
-#   
-#   # Add Totals Row
-#   totals <- data.frame(bin = "TOTAL")
-#   count_cols <- grep("_Count", colnames(final_df), value = TRUE)
-#   for(col in count_cols) {
-#     totals[[col]] <- sum(final_df[[col]], na.rm = TRUE)
-#     totals[[gsub("_Count", "_Pct", col)]] <- "100%"
-#   }
-#   final_df <- bind_rows(final_df, totals)
-#   
-#   # Save
-#   write.csv(final_df, file.path(base_dir, sprintf("integrity_%s.csv", cov_name)), row.names = FALSE)
-#   return(final_df)
-# }
-
-# generate_control_integrity_table <- function(original_data, matched_list, cov_name, 
-#                                              n_bins = 10, treatment_col = "treat", 
-#                                              base_dir) {
-#   library(dplyr)
-#   library(tidyr)
-#   
-#   # --- 1. Define Partition (Based on Original Data) ---
-#   all_ctrls <- original_data %>% dplyr::filter(!!sym(treatment_col) == 0)
-#   vals_pool <- all_ctrls[[cov_name]]
-#   
-#   # Isolate 0s (Mixtape/Dehejia-Wahba style)
-#   non_zero_vals <- vals_pool[vals_pool > 0.01]
-#   
-#   # Create breaks for the non-zero distribution
-#   core_breaks <- seq(min(non_zero_vals, na.rm=T), max(non_zero_vals, na.rm=T), length.out = n_bins)
-#   
-#   # --- 2. Create Labels ---
-#   format_v <- function(x) if(x >= 1000) paste0(round(x/1000, 1), "k") else round(x, 1)
-#   
-#   cell_labels <- c("$0")
-#   for(i in 1:(length(core_breaks)-1)) {
-#     cell_labels <- c(cell_labels, paste0("$", format_v(core_breaks[i]), "-", format_v(core_breaks[i+1])))
-#   }
-#   # Final bin is inclusive of anything beyond the last break
-#   cell_labels <- c(cell_labels, paste0("$", format_v(tail(core_breaks, 1)), "+"))
-#   
-#   # --- 3. Internal Counter ---
-#   get_counts <- function(df, label_name) {
-#     target <- df %>% dplyr::filter(!!sym(treatment_col) == 0)
-#     n_total <- nrow(target)
-#     v <- target[[cov_name]]
-#     
-#     # Map to indices: 1 for zeros, others via findInterval
-#     idx <- ifelse(v <= 0.01, 1, findInterval(v, core_breaks) + 1)
-#     idx <- pmin(idx, length(cell_labels)) # Safety cap
-#     
-#     # Use Factor to ensure all bins are represented in the count
-#     res <- as.data.frame(table(factor(cell_labels[idx], levels = cell_labels)))
-#     colnames(res) <- c("bin", paste0(label_name, "_Count"))
-#     
-#     # Calculate Pct
-#     res[[paste0(label_name, "_Pct")]] <- paste0(round((res[[2]] / n_total) * 100, 2), "%")
-#     return(res)
-#   }
-#   
-#   # --- 4. Assembly ---
-#   final_df <- get_counts(original_data, "Original_Pool")
-#   
-#   for (m_name in names(matched_list)) {
-#     m_stats <- get_counts(matched_list[[m_name]], m_name)
-#     final_df <- left_join(final_df, m_stats, by = "bin")
-#   }
-#   
-#   # --- 5. Add Totals ---
-#   totals <- data.frame(bin = "TOTAL")
-#   for (name in c("Original_Pool", names(matched_list))) {
-#     col_name <- paste0(name, "_Count")
-#     totals[[col_name]] <- sum(final_df[[col_name]], na.rm = TRUE)
-#     totals[[paste0(name, "_Pct")]] <- "100%"
-#   }
-#   
-#   final_df <- bind_rows(final_df, totals)
-#   
-#   # Save
-#   write.csv(final_df, file.path(base_dir, sprintf("integrity_%s.csv", cov_name)), row.names = FALSE)
-#   return(final_df)
-# }
-
-# generate_control_integrity_table_DEBUG <- function(original_data, matched_list, cov_name, 
-#                                                    n_bins = 10, treatment_col = "treat", 
-#                                                    base_dir) {
-#   library(dplyr)
-#   
-#   # --- STEP 1: MASTER BREAKS ---
-#   all_ctrls <- original_data %>% dplyr::filter(!!sym(treatment_col) == 0)
-#   vals_pool <- all_ctrls[[cov_name]]
-#   is_zero <- vals_pool <= 0.01
-#   non_zero_vals <- vals_pool[!is_zero]
-#   
-#   core_breaks <- seq(min(non_zero_vals, na.rm=TRUE), max(non_zero_vals, na.rm=TRUE), length.out = n_bins)
-#   
-#   # --- STEP 2: INTERNAL VECTOR HELPER ---
-#   get_counts_vector <- function(df, label_name) {
-#     target_df <- df %>% dplyr::filter(!!sym(treatment_col) == 0)
-#     v <- target_df[[cov_name]]
-#     
-#     # CHECKPOINT A: Initial Row Count
-#     cat("\n--- Debugging Group:", label_name, "---")
-#     cat("\n1. Rows found in group (Total N):", length(v))
-#     
-#     # Map to indices
-#     idx <- ifelse(v <= 0.01, 1, findInterval(v, core_breaks) + 1)
-#     
-#     # CHECKPOINT B: Indices after findInterval
-#     cat("\n2. Unique indices generated:", paste(sort(unique(idx)), collapse=", "))
-#     cat("\n3. Rows assigned to Index 1 (Zeros):", sum(idx == 1))
-#     
-#     # Cap indices to prevent overflow
-#     idx_capped <- pmin(pmax(idx, 1), length(core_breaks) + 1)
-#     
-#     # CHECKPOINT C: Post-Cap integrity
-#     cat("\n4. Rows after pmin/pmax cap:", length(idx_capped))
-#     
-#     # Create Table
-#     counts <- table(factor(idx_capped, levels = 1:(length(core_breaks) + 1)))
-#     vec <- as.numeric(counts)
-#     
-#     # CHECKPOINT D: Final Vector Sum
-#     cat("\n5. Sum of final count vector:", sum(vec))
-#     cat("\n----------------------------------\n")
-#     
-#     return(vec)
-#   }
-#   
-#   # --- STEP 3: PROCESS DATA ---
-#   orig_counts <- get_counts_vector(original_data, "Original_Pool")
-#   results_list <- list(Original_Pool = orig_counts)
-#   
-#   for (m_name in names(matched_list)) {
-#     results_list[[m_name]] <- get_counts_vector(matched_list[[m_name]], m_name)
-#   }
-#   
-#   # --- STEP 4: LABELS AND ASSEMBLY ---
-#   format_v <- function(x) if(x >= 1000) paste0(round(x/1000, 1), "k") else round(x, 1)
-#   labels <- c("$0")
-#   for(i in 1:(length(core_breaks)-1)) {
-#     labels <- c(labels, paste0("$", format_v(core_breaks[i]), "-", format_v(core_breaks[i+1])))
-#   }
-#   labels <- c(labels, paste0("$", format_v(tail(core_breaks, 1)), "+"))
-#   
-#   final_df <- data.frame(bin = labels)
-#   for (name in names(results_list)) {
-#     counts <- results_list[[name]]
-#     total_n <- sum(counts)
-#     final_df[[paste0(name, "_Count")]] <- counts
-#     final_df[[paste0(name, "_Pct")]] <- paste0(round((counts / total_n) * 100, 2), "%")
-#   }
-#   
-#   # --- STEP 5: TOTALS ---
-#   totals_row <- data.frame(bin = "TOTAL")
-#   for (name in names(results_list)) {
-#     totals_row[[paste0(name, "_Count")]] <- sum(results_list[[name]])
-#     totals_row[[paste0(name, "_Pct")]] <- "100%"
-#   }
-#   
-#   final_df <- rbind(final_df, totals_row)
-#   return(final_df)
-# }
-
 
 run_automated_comparison <- function(original_pool, results_list, covariates, base_dir) {
   

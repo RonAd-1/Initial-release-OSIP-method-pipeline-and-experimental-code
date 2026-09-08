@@ -80,54 +80,6 @@ build_intervals_from_unit_indices <- function(
   return(intervals)
 }
 
-# calculate_ls_cost_units <- function(
-#     bounds_idx, treatment_ids, treatment_scores, control_scores, 
-#     cov_df, metric, K_max, delta_dp, data_config, S_inv, #n_r, 
-#     id_var, treatment_col, 
-#     # fixed_redundant_unit_ids = character(0), 
-#     cov_cols = NULL, ...
-# ) {
-#   # Guard: Ensure we have a valid index vector [0...N]
-#   if (bounds_idx[1] != 0 || tail(bounds_idx, 1) != length(treatment_ids)) {
-#     return(list(cost = Inf, intervals = NULL))
-#   }
-#   
-#   intervals <- build_intervals_from_unit_indices(
-#     bounds_idx, treatment_ids, treatment_scores, control_scores,
-#     cov_df, treatment_col, id_var, delta_dp
-#   )
-#   
-#   if (is.null(intervals)) return(list(cost = Inf))
-#   
-#   # Viability: Every active bin must have at least one T and one C
-#   active_bins <- which(!intervals$is_empty)
-#   for (i in active_bins) {
-#     if (intervals$n_treated[i] == 0 || intervals$n_control[i] == 0) {
-#       return(list(cost = Inf, intervals = intervals))
-#     }
-#   }
-#   
-#   # Mahalanobis Calculation
-#   total_mahalanobis <- 0
-#   if (is.null(cov_cols)) cov_cols <- data_config$NUMERIC_COVARIATES
-#   t_id_list <- attr(intervals, "treatment_unit_ids")
-#   c_id_list <- attr(intervals, "control_unit_ids")
-#   
-#   for (i in active_bins) {
-#     bin_dist <- calculate_bin_mahalanobis(
-#       t_id_list[[i]], c_id_list[[i]], cov_df, cov_cols, S_inv, id_var
-#     )
-#     if (!is.finite(bin_dist)) return(list(cost = Inf, intervals = intervals))
-#     total_mahalanobis <- total_mahalanobis + bin_dist
-#   }
-#   
-#   return(list(
-#     cost = total_mahalanobis / length(treatment_ids), 
-#     intervals = intervals, 
-#     k_actual = length(active_bins)
-#   ))
-# }
-
 calculate_bin_mahalanobis <- function(t_ids, c_ids, cov_df, cov_cols, S_inv, id_var) {
   if (length(c_ids) == 0) return(Inf)
   
@@ -269,6 +221,64 @@ build_intervals_from_bounds_units <- function(bounds_indices, p_sorted, cov_df, 
   return(res)
 }
 
+check_feasible <- function(intervals) {
+
+  for(i in seq_len(nrow(intervals))) {
+
+    n_treated_bin_i <- intervals$n_treated[i]
+    n_control_bin_i <- intervals$n_control[i]
+
+    if (n_treated_bin_i == 0) {
+      next  # Skip to next interval
+    }
+
+    # Violating the fine-constraints
+    if (n_treated_bin_i > n_control_bin_i) {
+      return(FALSE)
+    }
+  }
+  return(TRUE)
+}
+
+calculate_distance_from_bounds_units <- function(bounds, cov_df, metric,
+                                                 id_var, treatment_col, X_all,
+                                                 S_inv, cov_cols, delta_dp, K_max, 
+                                                 p_sorted, left_border, right_border,
+                                                 intervals = NULL) {
+  
+  if (is.null(intervals)) {
+    # Step 1: Rebuild intervals from bounds
+    intervals <- build_intervals_from_bounds_units(bounds, p_sorted, cov_df, treatment_col, id_var, delta_dp, left_border)
+  } else {
+    intervals = intervals
+  }
+  
+  # Step 2: Combined Feasibility Check
+  # This catches: 1) Delta-width violations (NULL) 
+  #               2) N_treated > N_control violations
+  if (is.null(intervals) || !check_feasible(intervals)) {
+    return(list(cost = Inf, k_actual = NA))
+  }
+  
+  k_actual <- sum(intervals$k_cost)
+  
+  if (k_actual > K_max) {
+    return(list(cost = Inf, k_actual = k_actual))
+  }
+  
+  cost_result <- calculate_distance_from_dp_intervals_local(
+    intervals = intervals,
+    cov_df = cov_df,
+    id_var = id_var,
+    treatment_col = treatment_col,
+    X_working = X_all,
+    S_inv_working = S_inv,
+    cov_cols = cov_cols
+  )
+  
+  return(list(cost = cost_result, k_actual = k_actual, intervals = intervals))
+}
+
 run_osip_step2_heuristics_units <- function(osip_res_step1, initial_cost, 
                                              initial_bounds, 
                                              initial_intervals, cov_df, params, 
@@ -309,9 +319,6 @@ run_osip_step2_heuristics_units <- function(osip_res_step1, initial_cost,
   final_results <- list()
   # --- 2. Run and Process Searches ---
   all_trace_reports <- list() # The "Full Picture" collector
-  
-  # Debug
-  # browser()
   
   osip_res_step_1_row <- extract_step_row_stats(
     m_res            = osip_res_step1,        # Step 1 matched object
@@ -658,7 +665,7 @@ find_initial_partition <- function(treatment_scores, control_scores, k_bound,
   }
   
   # -------------------------------------------------------------------------
-  # 3D DP STATE INITIALIZATION (Successfully reduced from 4D)
+  # 3D DP STATE INITIALIZATION 
   # -------------------------------------------------------------------------
   
   dp <- array(list(), dim = c(n_t + 1, n_p, k_bound + 1))
@@ -854,301 +861,6 @@ find_initial_partition <- function(treatment_scores, control_scores, k_bound,
     } 
   }    
       
-      
-      
-      
-      
-      # 
-      # for (v_idx in 1:n_p) {
-      #   
-      #   prev_state <- dp[[i + 1, v_idx, k + 1]]
-      #   
-      #   # IF THIS IS THE VERY START (i=0, v=1, k=0), cost is 0
-      #   if (i == 0 && v_idx == 1 && k == 0) {
-      #     prev_cost_value <- 0
-      #   } else if (is.null(prev_state) || is.infinite(prev_state$cost)) {
-      #     next # Skip unreached or broken states
-      #   } else {
-      #     prev_cost_value <- prev_state$cost
-      #   }
-      #   
-      #   v_curr <- p_sorted[v_idx]
-      #   
-      #   if (abs(v_curr - right_border) < eps) next
-      #   
-      #   for (v_next_idx in (v_idx + 1):n_p) {
-      #     
-      #     v_next <- p_sorted[v_next_idx]
-      #     interval_width <- v_next - v_curr
-      #     
-      #     # Get control IDs in interval
-      #     control_ids_in_interval <- get_units_in_interval(
-      #       scores = control_scores,
-      #       v_left = v_curr,
-      #       v_right = v_next,
-      #       eps = eps,
-      #       left_border = left_border
-      #     )
-      #     controls_in_interval <- length(control_ids_in_interval)
-      #     
-      #     next_unit_ps <- if (i < n_t) T_sorted[i + 1] else Inf
-      #     v_curr_is_on_treatment <- abs(v_curr - next_unit_ps) < eps
-      #     
-      #     units_in_bin <- which(T_sorted >= v_curr - eps & T_sorted <= v_next + eps)
-      #     
-      #     # Only units we haven't covered yet
-      #     new_units <- units_in_bin[units_in_bin > i]
-      #     n_to_capture <- length(new_units)
-      #     
-      #     # Condition Checks
-      #     is_case_a <- (n_to_capture > 0 && 
-      #                     new_units[1] == (i + 1) && 
-      #                     interval_width <= delta_dp + eps && 
-      #                     controls_in_interval >= n_to_capture)
-      #     
-      #     can_jump_safely <- (i == n_t) || (i < n_t && T_sorted[i + 1] >= v_next - eps)
-      #     
-      #     if (is_case_a) {
-      #       # ═══════════════════════════════════════════════════════
-      #       # CASE A: NON-EMPTY (1:1 Match in Bin)
-      #       # ═══════════════════════════════════════════════════════
-      #       
-      #       treatment_ids_in_interval <- get_units_in_interval(
-      #         scores = treatment_scores,
-      #         v_left = v_curr,
-      #         v_right = v_next,
-      #         eps = eps,
-      #         left_border = left_border
-      #       )
-      #       
-      #       n_treated_to_cover <- length(new_units)  
-      #       next_i_candidate <- i + n_treated_to_cover
-      #       
-      #       # Safety check
-      #       if (next_i_candidate > n_t) {
-      #         next
-      #       }
-      #       
-      #       if (controls_in_interval >= n_treated_to_cover) {
-      #         
-      #         units_to_cover_ps <- T_sorted[(i + 1):next_i_candidate]
-      #         controls_ps_in_interval <- control_scores[control_ids_in_interval]
-      #         
-      #         individual_costs <- calculate_step1_cost(controls_ps_in_interval, units_to_cover_ps, dist_power)
-      #         
-      #         # No slack budget utilized: sum up all squared costs directly
-      #         current_block_cost <- sum(individual_costs^2)
-      #         
-      #         new_cost <- prev_cost_value + current_block_cost
-      #         k_new <- k + 1
-      #         
-      #         # 3D Target Indexing
-      #         ni_idx <- next_i_candidate + 1
-      #         nv_idx <- v_next_idx
-      #         nk_idx <- k_new + 1
-      #         
-      #         if (k_new <= k_bound) {
-      #           
-      #           # Check existing target state in 3D DP
-      #           target_state <- dp[[ni_idx, nv_idx, nk_idx]]
-      #           existing_record <- backtrack[[ni_idx, nv_idx, nk_idx]]
-      #           existing_prev_i <- if(is.null(existing_record)) -1 else existing_record$prev_i_idx
-      #           
-      #           current_stored_cost <- if(is.null(target_state)) Inf else target_state$cost
-      #           
-      #           is_better_cost   <- new_cost < current_stored_cost - eps
-      #           is_equal_cost    <- abs(new_cost - current_stored_cost) < eps
-      #           is_more_progress <- i > existing_prev_i 
-      #           
-      #           if (is.infinite(current_stored_cost) || is_better_cost || (is_equal_cost && is_more_progress)) {
-      #             
-      #             captured_ids <- treatment_ids[(i + 1):next_i_candidate]
-      #             
-      #             # Update 3D DP table
-      #             dp[[ni_idx, nv_idx, nk_idx]] <- list(
-      #               cost = new_cost,
-      #               k_val = k_new
-      #             )
-      #             
-      #             # Update 3D Backtrack Table
-      #             backtrack[[ni_idx, nv_idx, nk_idx]] <- list(
-      #               prev_i_idx = i,
-      #               prev_v_idx = v_idx,
-      #               prev_k_idx = k,
-      #               interval_start = v_curr,
-      #               interval_end   = v_next,
-      #               n_treated      = (next_i_candidate - i),
-      #               n_control      = controls_in_interval,
-      #               is_empty       = FALSE,
-      #               treatment_unit_ids = as.character(captured_ids),
-      #               control_unit_ids   = control_ids_in_interval
-      #             )
-      #           }
-      #         }
-      #       }
-      #       
-      #     } else {
-      #       # ═══════════════════════════════════════════════════════════
-      #       # CASE B: EMPTY GAP (Completely stripped of j / slack logic)
-      #       # ═══════════════════════════════════════════════════════════
-      #       
-      #       # 🚨 BUG DETECTION ASSERTION 🚨
-      #       stop(sprintf(
-      #         paste0(
-      #           "\n❌ BUG DETECTED: Case B (Empty Gap) was reached!\n",
-      #           "   State Details:\n",
-      #           "   - Current i (treated idx): %d / %d\n",
-      #           "   - Propensity v_curr: %.8f (idx %d)\n",
-      #           "   - Propensity v_next: %.8f (idx %d)\n",
-      #           "   - Interval Width: %.8f (delta_dp = %.8f)\n",
-      #           "   - Treated in bin: %d | Controls in bin: %d\n",
-      #           "   - Case A failed because: width_ok=%s, controls_ok=%s"
-      #         ),
-      #         i, n_t,
-      #         v_curr, v_idx,
-      #         v_next, v_next_idx,
-      #         interval_width, delta_dp,
-      #         n_to_capture, controls_in_interval,
-      #         as.character(interval_width <= delta_dp + eps),
-      #         as.character(controls_in_interval >= n_to_capture)
-      #       ))
-      #       
-      #       if (can_jump_safely) {
-      #         rho <- ceiling((interval_width - eps) / delta_dp)
-      #         if (rho < 1) rho <- 1
-      #         k_new <- k + rho
-      #         
-      #         # 3D Target Indexing
-      #         ni_idx <- i + 1
-      #         nv_idx <- v_next_idx
-      #         nk_idx <- k_new + 1
-      #         
-      #         is_exit      <- (abs(v_next - right_border) < eps)
-      #         is_last_ps   <- (v_next_idx == n_p)
-      #         first_t_ps   <- T_sorted[1]
-      #         
-      #         is_next_unit <- (i < n_t && abs(v_next - T_sorted[i + 1]) < eps)
-      #         is_bridge    <- (i == 0 && v_curr < first_t_ps && v_next >= first_t_ps - eps)
-      #         
-      #         is_strategic <- is_exit || is_last_ps || is_next_unit || is_bridge
-      #         
-      #         if (i == n_t && !is_exit) is_strategic <- FALSE
-      #         
-      #         if (k_new <= k_bound && is_strategic) {
-      #           target_state <- dp[[ni_idx, nv_idx, nk_idx]]
-      #           
-      #           current_stored_cost <- if(is.null(target_state)) Inf else target_state$cost
-      #           
-      #           if (is.infinite(current_stored_cost) || prev_cost_value < current_stored_cost - eps) {
-      #             
-      #             # Update 3D DP table
-      #             dp[[ni_idx, nv_idx, nk_idx]] <- list(
-      #               cost = prev_cost_value,
-      #               k_val = k_new
-      #             )
-      #             
-      #             # Update 3D Backtrack table
-      #             backtrack[[ni_idx, nv_idx, nk_idx]] <- list(
-      #               prev_i_idx = i, 
-      #               prev_v_idx = v_idx, 
-      #               prev_k_idx = k, 
-      #               interval_start = v_curr, 
-      #               interval_end = v_next,
-      #               n_treated = 0, 
-      #               n_control = controls_in_interval,
-      #               is_empty = TRUE, 
-      #               rho = rho,
-      #               treatment_unit_ids = character(0),
-      #               control_unit_ids = control_ids_in_interval
-      #             )
-      #           }
-      #         }
-      #       }
-      #     }
-      #   }
-      # }
-  #  } # End i
-#  } # End k
-  
-  # Return DP state objects for backtracking extraction
-  # return(list(dp = dp, backtrack = backtrack))
-  
-  # # ═══════════════════════════════════════════════════════════════════
-  # # FIND OPTIMAL TERMINAL STATE (Converted to 3D)
-  # # ═══════════════════════════════════════════════════════════════════
-  # 
-  # cat("\n=== Searching for Optimal Final State (Target: i=n_t, PS=right_border) ===\n")
-  # best_final_cost <- Inf
-  # best_final_state <- NULL
-  # 
-  # v_term_idx <- n_p 
-  # i_term_idx <- n_t + 1
-  # 
-  # for (k_val in 0:k_bound) {
-  #   state <- dp[[n_t + 1, v_term_idx, k_val + 1]]
-  #   
-  #   if (!is.null(state) && state$cost < best_final_cost - 1e-9) {
-  #     best_final_state <- list(
-  #       final_cost = state$cost,
-  #       final_i_idx = i_term_idx,
-  #       final_v_idx = v_term_idx,
-  #       final_k_idx = k_val + 1
-  #     )
-  #   }
-  # }
-  # 
-  # # --- CORRECTED 3D DEBUG CHECK ---
-  # n_t <- length(treatment_scores)
-  # n_p <- length(p_sorted)
-  # 
-  # cat("\n--- Checking 3D DP Terminal Reachability ---\n")
-  # 
-  # # We check the "Terminal Slice": Last Treatment Unit (n_t+1) and Last PS (n_p)
-  # # across all possible K values.
-  # terminal_slice_costs <- c()
-  # 
-  # for (k_idx in 1:(k_bound + 1)) {
-  #   cell <- dp[[n_t + 1, n_p, k_idx]]
-  #   if (!is.null(cell) && is.finite(cell$cost)) {
-  #     terminal_slice_costs <- c(terminal_slice_costs, cell$cost)
-  #   }
-  # }
-  # 
-  # n_valid_paths <- length(terminal_slice_costs)
-  # cat(sprintf("Valid paths reaching Target (i=%d, PS=right_border): %d\n", n_t, n_valid_paths))
-  # 
-  # if (n_valid_paths == 0) {
-  #   # Find the furthest 'i' (treatment unit) we actually reached
-  #   max_i_reached <- 0
-  #   for (i_idx in 1:(n_t + 1)) {
-  #     reached_this_i <- FALSE
-  #     # Check if any state in this 'i' level is finite in 3D DP
-  #     for (v_idx in 1:n_p) {
-  #       for (k_idx in 1:(k_bound + 1)) {
-  #         if (is.finite(dp[[i_idx, v_idx, k_idx]]$cost)) {
-  #           reached_this_i <- TRUE; break
-  #         }
-  #       }
-  #       if(reached_this_i) break
-  #     }
-  #     if (reached_this_i) max_i_reached <- i_idx - 1
-  #   }
-  #   
-  #   cat(sprintf("⚠️ DP stalled. Furthest treatment unit reached: %d / %d\n", max_i_reached, n_t))
-  #   return(NULL) 
-  # }
-  # 
-  # if (is.null(best_final_state)) {
-  #   cat(sprintf("DEBUG: Checking dp[[%d, %d, ...]]\n", n_t + 1, v_term_idx))
-  #   stop("❌ Search loop failed to capture the terminal state.")
-  # }
-  # 
-  # cat(sprintf("✅ Success! Optimal Final Cost: %.6f at State [k_idx=%d]\n", 
-  #             best_final_state$final_cost, 
-  #             best_final_state$final_k_idx))
-  # 
-  
-  
   # ═══════════════════════════════════════════════════════════════════
   # 3D DP TERMINAL REACHABILITY & POST-MORTEM INSPECTION
   # ═══════════════════════════════════════════════════════════════════
@@ -1300,43 +1012,43 @@ find_initial_partition <- function(treatment_scores, control_scores, k_bound,
   ))
 }
 
-reconstruct_intervals_and_find_redundant <- function(backtrack, p_sorted, cov_df, 
-                                                     id_var, treatment_col, 
+reconstruct_intervals_and_find_redundant <- function(backtrack, p_sorted, cov_df,
+                                                     id_var, treatment_col,
                                                      n_t, final_v_idx,
                                                      final_k_idx, eps) {
-  
+
   n_p <- length(p_sorted)
   k_bound <- dim(backtrack)[3] - 1
-  
+
   # Current indices (1-based for R)
   current_i_idx <- n_t + 1
   current_v_idx <- final_v_idx
   current_k_idx <- final_k_idx
-  
+
   cat(sprintf("\n=== Starting Reconstruction ===\n"))
-  
+
   intervals_list <- list()
   step <- 0
-  
+
   # Main backtracking loop
   while (current_i_idx >= 1 && current_v_idx >= 1) {
     step <- step + 1
-    
+
     # --- 2. DATA ACCESS (Using 3D array index) ---
     bp_list <- backtrack[[current_i_idx, current_v_idx, current_k_idx]]
-    
+
     if (is.null(bp_list)) {
-      cat(sprintf("  Stopping: Found NULL at [i=%d, v=%d, k=%d]\n", 
+      cat(sprintf("  Stopping: Found NULL at [i=%d, v=%d, k=%d]\n",
                   current_i_idx, current_v_idx, current_k_idx))
       break
     }
-    
+
     # Check if this is the origin state
     if (is.null(bp_list$prev_i_idx) || bp_list$prev_i_idx == -1) {
       cat(sprintf("  Reached Origin sentinel at Step %d. Done.\n", step))
       break
     }
-    
+
     # --- 3. ID EXTRACTION & TYPE CHECK ---
     # Extract treatment IDs
     treatment_ids <- bp_list$treatment_unit_ids
@@ -1345,7 +1057,7 @@ reconstruct_intervals_and_find_redundant <- function(backtrack, p_sorted, cov_df
     } else {
       treatment_ids <- as.character(unlist(treatment_ids))
     }
-    
+
     # Extract control IDs
     control_ids <- bp_list$control_unit_ids
     if (is.null(control_ids)) {
@@ -1353,24 +1065,24 @@ reconstruct_intervals_and_find_redundant <- function(backtrack, p_sorted, cov_df
     } else {
       control_ids <- as.character(unlist(control_ids))
     }
-    
+
     # --- 4. PRINTING ---
     s_ps  <- as.numeric(bp_list$interval_start)
     e_ps  <- as.numeric(bp_list$interval_end)
     k_c   <- as.integer(if(length(treatment_ids) == 0) bp_list$rho else 1)
     label <- if(length(treatment_ids) == 0) "EMPTY" else "NON-EMPTY"
-    
-    cat(sprintf("Step %d: [%.4f, %.4f] %s (k_cost=%d)\n", 
+
+    cat(sprintf("Step %d: [%.4f, %.4f] %s (k_cost=%d)\n",
                 step, s_ps, e_ps, label, k_c))
-    
+
     # Verify control count matches attribute expectation
     n_c_stored <- as.integer(bp_list$n_control %||% 0)
-    
+
     if (length(control_ids) != n_c_stored) {
       cat(sprintf("  ⚠️ Warning: Control count mismatch - stored: %d, IDs: %d\n",
                   n_c_stored, length(control_ids)))
     }
-    
+
     # ═══ SAVE THE INTERVAL DATA ═══
     new_interval <- list(
       start_ps      = s_ps,
@@ -1382,33 +1094,33 @@ reconstruct_intervals_and_find_redundant <- function(backtrack, p_sorted, cov_df
       treatment_ids = treatment_ids,
       control_ids   = control_ids
     )
-    
+
     intervals_list[[step]] <- new_interval
-    
+
     # --- 5. MOVE TO PREVIOUS STATE ---
     next_i_logical <- bp_list$prev_i_idx
     next_v_idx     <- bp_list$prev_v_idx
     next_k_logical <- bp_list$prev_k_idx
-    
+
     if (next_i_logical == -1) {
       cat(sprintf("  Success: Reached the origin (Sentinel -1) at Step %d.\n", step))
       break
     }
-    
+
     # Convert logical values to R indices (1-based index translation)
     current_i_idx <- next_i_logical + 1
     current_v_idx <- next_v_idx
     current_k_idx <- next_k_logical + 1
   }
-  
+
   # Reverse the list to get chronological order (PS 0 -> 1)
   final_intervals_list <- rev(intervals_list)
-  
+
   # Check if it's empty to avoid downstream crashes
   if (length(final_intervals_list) == 0) {
     return(list(intervals = data.frame(), redundant_ids = NULL))
   }
-  
+
   # Stack elements into a clean dataframe
   intervals_df <- do.call(rbind, lapply(final_intervals_list, function(x) {
     data.frame(
@@ -1421,40 +1133,40 @@ reconstruct_intervals_and_find_redundant <- function(backtrack, p_sorted, cov_df
       stringsAsFactors = FALSE
     )
   }))
-  
+
   # Attach ID tracking arrays as attributes to the df
   attr(intervals_df, "treatment_unit_ids") <- lapply(final_intervals_list, `[[`, "treatment_ids")
   attr(intervals_df, "control_unit_ids")   <- lapply(final_intervals_list, `[[`, "control_ids")
-  
+
   # ═══ ASSIGNMENT VERIFICATION ═══
   cat("\n=== Verification ===\n")
   total_treatments <- sum(sapply(attr(intervals_df, "treatment_unit_ids"), length))
   total_controls   <- sum(sapply(attr(intervals_df, "control_unit_ids"), length))
-  
+
   cat(sprintf("Treatment units assigned: %d (expected: %d)\n", total_treatments, n_t))
   cat(sprintf("Control units assigned: %d\n", total_controls))
-  
+
   # Duplicate unit validation
   all_treatment_ids <- unlist(attr(intervals_df, "treatment_unit_ids"))
   all_control_ids   <- unlist(attr(intervals_df, "control_unit_ids"))
-  
+
   dup_treatments <- all_treatment_ids[duplicated(all_treatment_ids)]
   dup_controls   <- all_control_ids[duplicated(all_control_ids)]
-  
+
   if (length(dup_treatments) > 0) {
-    cat(sprintf("⚠️ WARNING: %d treatment units assigned to multiple bins!\n", 
+    cat(sprintf("⚠️ WARNING: %d treatment units assigned to multiple bins!\n",
                 length(dup_treatments)))
   }
-  
+
   if (length(dup_controls) > 0) {
-    cat(sprintf("⚠️ WARNING: %d control units assigned to multiple bins!\n", 
+    cat(sprintf("⚠️ WARNING: %d control units assigned to multiple bins!\n",
                 length(dup_controls)))
   }
-  
+
   if (total_treatments == n_t && length(dup_treatments) == 0 && length(dup_controls) == 0) {
     cat("✅ All units accounted for with no duplicates!\n")
   }
-  
+
   return(list(intervals = intervals_df))
 }
 
@@ -1488,6 +1200,7 @@ calculate_ls_cost <- function(
     cov_cols = cov_cols,    
     delta_dp = delta_dp,     
     K_max = K_max,
+    p_sorted = p_sorted,
     intervals = intervals,
     left_border = left_border,
     right_border = right_border
@@ -2112,9 +1825,6 @@ calculate_and_format_ate <- function(matching_res, matching_non_1_1, method_labe
     gamma_shift <- if (!is.na(gamma_val)) round(gamma_val, 4) else 1.0
   }
   
-  #debug
-  # browser()
-  
   return(data.frame(
     method      = method_label,
     n_treated   = n_treated,
@@ -2175,99 +1885,6 @@ extract_step_row_stats <- function(m_res, trace_name, est_cost,
   return(as.data.frame(full_trace_row, stringsAsFactors = FALSE))
 }
 
-# process_and_visualize_step <- function(m_res, est_cost, index, step, method_name, trace_name, step_label, 
-#                                        step_path, dist_type_name, data_config, 
-#                                        treatment_col, shifting_point, 
-#                                        matching_non_1_1, delta_dp, dataset_name,cov_df) {
-# 
-#   if (is.null(m_res)) return(NULL)
-#   
-#   # 1. Calculate Method Statistics
-#   row_stats <- calculate_method_row_stats(
-#     df = m_res$data_matched, 
-#     label = trace_name, 
-#     matching_non_1_1 = matching_non_1_1,
-#     data_config = data_config,
-#     treatment_col = treatment_col,
-#     gamma_val = shifting_point
-#   )
-#   
-#   # 2. Get Balance stats
-#   bal_stats <- generate_balance_stats(
-#     matched_df    = m_res$data_matched, 
-#     covariates    = data_config$ALL_COVARIATES, 
-#     treatment_col = treatment_col
-#   )
-#   
-#   # 3. Get Retention
-#   n_treated <- sum(m_res$data_matched[[treatment_col]] == 1)
-#   
-#   # 4. Combine into Trace Row
-#   full_trace_row <- cbind(
-#     row_stats, 
-#     bal_stats, 
-#     N_Matched = n_treated,
-#     est_cost
-#   )
-#   
-#   # 4. Extract Distance Metrics for single matched object
-#   dist_stats <- NULL
-#   if (!is.null(m_res$match_map)) {
-#     dist_stats <- get_map_stats(m_res$match_map, trace_name)
-#     # Remove redundant label/method column if present to avoid duplication during cbind
-#     dist_stats$method <- NULL 
-#   }
-#   
-#   # Append distance stats if available
-#   if (!is.null(dist_stats)) {
-#     full_trace_row <- cbind(full_trace_row, dist_stats)
-#   }
-#   
-#   # Ensure full_trace_row is a 1-row data frame before returning
-#   full_trace_row <- as.data.frame(full_trace_row, stringsAsFactors = FALSE)
-# 
-#   # --- Visualizations ---
-#   
-#   # Love Plot Object
-#   step_bal_obj <- create_bal_object(m_res, data_config$ALL_COVARIATES, treatment_col)
-#   current_bal_list <- list("Optimized" = step_bal_obj)
-#   
-#   create_love_plot(
-#     bal_list      = current_bal_list,
-#     delta_dp      = delta_dp,
-#     dataset_name  = dataset_name,
-#     base_dir      = step_path,
-#     method_labels = c("Optimized" = step_label)
-#   )
-#   
-#   # SMD Comparison Bar Chart
-#   create_smd_comparison(
-#     metrics_df    = full_trace_row, 
-#     delta_dp      = delta_dp,
-#     dataset_name  = dataset_name,
-#     base_dir      = step_path
-#   )
-#   
-#   # Interval Visualization (The Jitter Plot)
-#   # Cost here is the actual matching cost! 
-#   visualize_osip_step_results(
-#     data_subset        = cov_df,
-#     best_intervals     = step$intervals,
-#     title_suffix       = step_label,
-#     method_used        = dist_type_name,
-#     data_config        = data_config,
-#     delta_dp           = delta_dp,
-#     dataset_name       = dataset_name,
-#     cost               = est_cost,
-#     base_dir           = step_path,
-#     treatment_col      = treatment_col
-#   )
-#   
-#   save_solution_full(step, m_res, step_path, dist_type_name, index, method_name)
-#   
-#   return(full_trace_row)
-# }
-
 analyze_optimization_trace <- function(osip_res_step_1_row, method_name, trace, 
                                        cov_df, dist_matrix, matching_non_1_1,
                                        data_config, params, treatment_col, 
@@ -2300,9 +1917,6 @@ analyze_optimization_trace <- function(osip_res_step_1_row, method_name, trace,
     
     step_label = sprintf("Trace_Step_%d", i)
     full_trace_row <- NULL
-    
-    #Debug
-    # browser()
     
     # This is clean, safe, and handles the slashes for you
     trace_dir_path_solutions <- file.path(
@@ -2349,10 +1963,6 @@ analyze_optimization_trace <- function(osip_res_step_1_row, method_name, trace,
       dir.create(step_path, recursive = TRUE)
     }
     
-    #Debug
-    # cat("base_dir is ", base_dir)
-    # browser()
-    
     # --- PART 1: RECONSTRUCT MATCHING ---
     # We call your existing matcher but suppress the plots/saving to keep it fast
     m_res <- create_osip_matching(
@@ -2370,42 +1980,13 @@ analyze_optimization_trace <- function(osip_res_step_1_row, method_name, trace,
       outcome_var     = outcome_var,
       step_label      = step_label
     )
-    
-    # Initialize a variable to hold the row for THIS iteration
-    # row_to_return <- NULL
-    
+   
     shifting_point = m_res$sens$exact_threshold
-    
-    # TODO: These constant "strict"\"robust" should be defined using Enam
-    
-    
+
     # Determine the label based on heuristic type
     is_strict <- tolower(dist_type_name) == "strict"
     base_method_label <- if(is_strict) method_labels[methods$osip_step2_strict] else method_labels[methods$osip_step2_robust]
     current_trace_name <- paste(base_method_label, step_label, sep = "_")
-    
-    # debug
-    # browser()
-    
-    # Call the unified function
-    # full_trace_row <- process_and_visualize_step(
-    #   m_res              = m_res,
-    #   est_cost           = step$cost, 
-    #   index              = i,
-    #   step               = step,
-    #   method_name        = method_name,
-    #   trace_name         = current_trace_name,
-    #   step_label         = step_label,
-    #   step_path          = step_path,
-    #   dist_type_name     = dist_type_name,
-    #   data_config        = data_config,
-    #   treatment_col      = treatment_col,
-    #   shifting_point     = shifting_point,
-    #   matching_non_1_1   = matching_non_1_1,
-    #   delta_dp           = delta_dp,
-    #   dataset_name       = dataset_name,
-    #   cov_df             = cov_df
-    # )
     
     full_trace_row <- extract_step_row_stats(
       m_res            = m_res,        
@@ -2419,17 +2000,11 @@ analyze_optimization_trace <- function(osip_res_step_1_row, method_name, trace,
     return(full_trace_row)
     })
   
-  # Debug
-  # browser()
-  
   # Bind all heuristic trace steps into a single dataframe
   heuristic_df <- do.call(rbind, trace_rows)
   
   # Prepend the Step 1 (DP) baseline row as Row 1
   comparison_df <- rbind(osip_res_step_1_row, heuristic_df)
-  
-  # Debug
-  # browser()
   
   # Calculate Efficiency Metrics
   # Efficiency is inversely proportional to the variance (SE^2)
@@ -2537,22 +2112,13 @@ compare_solutions <- function(solution_a, solution_b, name_a = "Solution A", nam
   # --- Step 3: Compare Unit Assignments (Differences Only) ---
   cat(sprintf("\n[Step 3: Unit Assignment Shifts]\n"))
   
-  # Debug
-  # browser()
-  
   # Inside your compare_solutions function:
   ids_a <- extract_treatment_assignments(solution_a)
   ids_b <- extract_treatment_assignments(solution_b)
   
-  # Debug
-  # browser()
-  
   # Step 3: Compare assignments
   common_ids <- intersect(names(ids_a), names(ids_b))
   diff_ids <- common_ids[ids_a[common_ids] != ids_b[common_ids]]
-  
-  # Debug
-  # browser()
   
   if (length(diff_ids) > 0) {
     cat(sprintf("  Detected %d unit shifts:\n", length(diff_ids)))
@@ -2563,7 +2129,6 @@ compare_solutions <- function(solution_a, solution_b, name_a = "Solution A", nam
   } else {
     cat("  ✓ All units are assigned to the same bins in both solutions.\n")
   } 
-  # cat("\n" + strrep("─", 30) + "\n")
 }
 
 load_solution_from_csv <- function(file_path) {
@@ -2637,9 +2202,6 @@ save_solution_full <- function(step, m_res, trace_dir, dist_name, index, method_
     best_intervals = step$intervals
   )
   
-  # debug
-  # browser()
-  
   # 5. Save the wrapped object
   saveRDS(wrapped_sol, file = file_path)
   
@@ -2680,9 +2242,6 @@ get_best_balanced_row <- function(trace_df) {
   balanced_rows <- trace_df[trace_df$N_Imbalanced_01 == 0 & 
                               trace_df$N_Imbalanced_02 == 0, ]
   
-  # Debug
-  # browser()
-  
   # 2. Safety check: if no rows are perfectly balanced, return NULL or a message
   if (nrow(balanced_rows) == 0) {
     message("No perfectly balanced steps (0/0) found in this trace.")
@@ -2702,9 +2261,6 @@ extract_step_info <- function(row) {
   # Extract the step number (digits after the last "Step_")
   step_num <- as.numeric(gsub(".*_Step_", "", method_string))
   
-  # Debug
-  # browser()
-  
   # Extract the heuristic name
   # If it's stored in a column named 'heuristic_source' from our tournament function
   # or if we need to pull it from the row attribute/index:
@@ -2718,32 +2274,6 @@ extract_step_info <- function(row) {
     step      = step_num
   ))
 }
-
-# get_global_best_balanced_solution <- function(base_dir, mode) {
-#   # 1. Load the master trace table that aggregates all heuristic runs
-#   # (Assuming your table has columns: 'step', 'is_balanced', 'cost', and 'heuristic_name')
-#   master_trace <- read.csv(file.path(base_dir, sprintf("master_trace_table_%s.csv", mode)))
-#   
-#   # 2. Find the rows that are balanced
-#   balanced_candidates <- master_trace %>% filter(is_balanced == TRUE)
-#   
-#   if (nrow(balanced_candidates) == 0) return(NULL)
-#   
-#   # 3. Find the 'Best' one (lowest cost)
-#   best_row <- balanced_candidates[which.min(balanced_candidates$cost), ]
-#   
-#   # 4. THE CRITICAL CHECK: 
-#   # Is this 'best' row actually the final iteration of its heuristic?
-#   # We find the max step for that specific heuristic in the full trace.
-#   final_step_for_this_run <- max(master_trace$step[master_trace$heuristic_name == best_row$heuristic_name])
-#   
-#   if (best_row$step == final_step_for_this_run) {
-#     message(sprintf("Global best %s solution is the final step. Returning NULL to avoid duplication.", mode))
-#     return(NULL)
-#   }
-#   
-#   return(best_row)
-# }
 
 get_global_best_balanced_solution <- function(base_dir_delta, dist_type_name) {
   # 1. Define the heuristics to check
@@ -2773,16 +2303,11 @@ get_global_best_balanced_solution <- function(base_dir_delta, dist_type_name) {
         message(sprintf("[%s] Final solution is already balanced. Skipping to avoid duplicate counting.", h_name))
         next
       }
-      # Debug
-      # browser()
-      
+    
       # 3. If last row isn't balanced, look for an intermediate balanced row (rows 1 to n-1)
       if (n_rows > 1) {
         intermediate_df <- trace_df[1:(n_rows - 1), ]
         best_intermediate_row <- get_best_balanced_row(intermediate_df)
-        
-        # Debug
-        # browser()
         
         if (is.null(best_intermediate_row)) {
           message(sprintf("[%s] No balanced (0/0) intermediate state found prior to termination.", h_name))
@@ -2813,82 +2338,6 @@ get_global_best_balanced_solution <- function(base_dir_delta, dist_type_name) {
   message(sprintf("--> Global intermediate winner selected from: %s", global_winner$source_heuristic))
   return(global_winner)
 }
-
-# get_global_best_balanced_solution <- function(base_dir_delta, dist_type_name) {
-#   # 1. Define the heuristics to check
-#   heuristics <- c("local_search", "enhanced_ls", "simulated_annealing")
-#   heuristic_winners <- list()
-#   
-#   for (h_name in heuristics) {
-#     run_list_path <- file.path(base_dir_delta, h_name, "optimization_traces")
-#     file_name <- sprintf("%s_%s.csv", h_name, tolower(dist_type_name))
-#     trace_path <- file.path(run_list_path, file_name)
-#     
-#     #Debug
-#     browser()
-#     
-#     if (file.exists(trace_path)) {
-#       #Debug
-#       browser()
-#       
-#       trace_df <- read.csv(trace_path, stringsAsFactors = FALSE)
-#       n_rows <- nrow(trace_df)
-#       
-#       if (n_rows < 1) next
-#       
-#       # 2. Check the LAST row first
-#       # If the final solution is already balanced, we skip this heuristic 
-#       # because it will already be represented in the final summary.
-#       last_row <- trace_df[n_rows, ]
-#       is_last_balanced <- (last_row$N_Imbalanced_01 == 0 && last_row$N_Imbalanced_02 == 0)
-#       
-#       #Debug
-#       # browser()
-#       
-#       if (is_last_balanced) {
-#         message(sprintf("For %s: Final solution is already balanced. Skipping to avoid duplication.", h_name))
-#         next
-#       }
-#       
-#       # 3. If the last row isn't balanced, find the best intermediate solution
-#       # We scan from bottom-to-top (excluding the last row) to find the 'best' balanced state.
-#       if (n_rows > 1) {
-#         # Create a dataframe of only intermediate steps
-#         intermediate_df <- trace_df[1:(n_rows - 1), ]
-#         
-#         # Use your existing helper function to find the best (lowest cost) 0/0 row
-#         best_intermediate <- get_best_balanced_row(intermediate_df)
-#         
-#         # Debug
-#         browser()
-#         
-#         if (!is.null(best_intermediate)) {
-#           # Attach source info so the RDS loader knows where to go
-#           best_intermediate$source_heuristic <- h_name
-#           heuristic_winners[[h_name]] <- best_intermediate
-#           
-#           # Debug
-#           browser()
-#         }
-#       }
-#       
-#     } else {
-#       message(sprintf("Skipping: Trace for %s not found.", h_name))
-#     }
-#   }
-#   
-#   # 4. Tournament: If multiple heuristics found intermediate balanced solutions,
-#   # pick the one with the global minimum cost.
-#   if (length(heuristic_winners) == 0) {
-#     message("No unique intermediate balanced solutions found across all heuristics.")
-#     return(NULL)
-#   }
-#   
-#   tournament_df <- do.call(rbind, heuristic_winners)
-#   global_winner <- tournament_df[which.min(tournament_df$cost), ]
-#   
-#   return(global_winner)
-# }
 
 get_best_rds_path <- function(base_dir, dist_type_name, winner_row) {
   # 1. Extract metadata using the extraction logic we discussed

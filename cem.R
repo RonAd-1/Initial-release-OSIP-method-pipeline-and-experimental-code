@@ -28,13 +28,6 @@ cem_ps <- function(data,
     }
   }
   
-  # Debug: 
-  browser()
-  cat("In CEM, cp_list is :\n")
-      
-  print(cp_list)
-  print("\n")
-  
   # 4. Run CEM on the minimized data frame
   cat(sprintf("Running CEM matching (%s)...\n", method_label))
   cat(sprintf("  Input: %d units (T=%d, C=%d)\n",
@@ -52,7 +45,7 @@ cem_ps <- function(data,
     cat("  Using automatic binning (Scott's rule)\n")
   }
   
-  # CRITICAL FIX: Always drop unmatched units for proper CEM matching
+  # Always drop unmatched units for proper CEM matching
   # The cem package has conflicting behavior between 'drop' and 'keep.all'
   # Best practice: ONLY use 'drop' parameter
   cem_out <- cem::cem(
@@ -194,83 +187,3 @@ run_cem <- function(data, col_config, treatment_col, formula_cem) {
     m_out = m.out
   ))
 }
-
-# run_cem<- function(data, col_config, treatment_col, formula_cem) {
-#   cat("\n--- Running CEM (k2k) ---\n")
-#   
-#   # Use only the numeric covariates to keep it fair with your balance table
-#   # formula_cem <- reformulate(col_config$NUMERIC_COVARIATES, treatment_col)
-#   
-#   # Debug
-#   # browser()
-#   
-#   # k2k = TRUE is essential to get a match_id for your distance metrics
-#   m.out <- matchit(formula_cem, 
-#                    data = data, 
-#                    method = "cem", 
-#                    k2k = TRUE)
-#   
-#   # Pass 'data' explicitly to solve the environment error
-#   matched_data <- match.data(m.out, data = data)
-#   
-#   # Standardize naming for your comparison function
-#   if ("subclass" %in% names(matched_data)) {
-#     matched_data <- matched_data %>% rename(match_id = subclass)
-#   }
-#   
-#   return(list(
-#     data_matched = matched_data,
-#     m_out = m.out
-#   ))
-# }
-
-# ============================================================================
-# USAGE EXAMPLES
-# ============================================================================
-
-# Example 1: CEM with Levin-optimized intervals
-# levin_intervals <- levin_res_step_1$intervals_dist_optimal
-# cem_endpoints_levin <- sort(unique(c(0, 
-#                                      levin_intervals$start,
-#                                      levin_intervals$end,
-#                                      1)))
-# 
-# cem_res_levin <- cem_ps(
-#   data = data_subset,
-#   custom_endpoints = cem_endpoints_levin,
-#   method_label = "CEM (Levin Intervals)"
-# )
-# 
-# # Example 2: CEM with SAME NUMBER of bins as Levin, but equal-width (not optimized)
-# # Count non-empty intervals from Levin
-# n_intervals_levin <- sum(levin_intervals$end > 0 & levin_intervals$end <= 1)
-# 
-# cem_res_auto <- cem_ps_auto(
-#   data = data_subset,
-#   n_bins = n_intervals_levin,  # ← Same K as Levin!
-#   method_label = sprintf("CEM (%d Auto Bins)", n_intervals_levin)
-# )
-# 
-# # Example 3: Compare all methods
-# results_comparison <- rbind(
-#   calculate_and_format_ate(unmatched_res, "Unmatched", col_config),
-#   calculate_and_format_ate(cem_res_auto, sprintf("CEM (%d Auto)", n_intervals_levin), col_config),
-#   calculate_and_format_ate(cem_res_levin, "CEM (Levin)", col_config),
-#   calculate_and_format_ate(levin_res_optimized, "Levin Optimized", col_config),
-#   calculate_and_format_ate(cardinality_res, "Cardinality", col_config)
-# )
-# 
-# print(results_comparison)
-# 
-# # ============================================================================
-# # ALTERNATIVE: Extract K directly from DP output
-# # ============================================================================
-# 
-# # If your DP returns k_dist_optimal:
-# k_from_dp <- levin_res_step_1$k_dist_optimal
-# 
-# cem_res_auto_k <- cem_ps_auto(
-#   data = data_subset,
-#   n_bins = k_from_dp,
-#   method_label = sprintf("CEM (%d Auto)", k_from_dp)
-# )

@@ -29,13 +29,9 @@ library(optrefine)
 
 source("dataset_configs.R", echo = FALSE)
 source("osip_functions.R", echo = FALSE)
-source("heuristics_helping_functions.R", echo = FALSE)
-source("cardinality_matching.R", echo = FALSE)
-source("genetic_matching.R", echo = FALSE)
 source("full_matching.R", echo = FALSE)
 source("cem.R", echo = FALSE)
 source("plots.R", echo = FALSE)
-source("original_distance_for_intervals.R", echo = FALSE)
 source("complete_comparison.R", echo = FALSE)
 source("heuristic_units.R", echo = FALSE)
 source("cochran_quintile.R", echo = FALSE)
@@ -421,9 +417,8 @@ full_matching_res <- run_full_match(
 # This is the baseline for comparison 
 unmatched_res <- list(data_matched = cov_df_standardized %>% mutate(weights = 1))
 
-# Todo: Return later, currently analysis is on single delta value
 for (current_delta in delta_values) {
-
+  
   cat(sprintf("\n\n>>> STARTING ANALYSIS FOR DELTA = %.3f <<<\n", current_delta))
   
   power <- sprintf("power_%g", dist_power)
@@ -499,6 +494,8 @@ for (current_delta in delta_values) {
   print(table(cov_df_standardized[[treatment_col]], useNA = "ifany"))
   cat("Rows in cov_df:", nrow(cov_df_standardized), "\n")
   cat("--- END DEBUG ---\n")
+  
+  
   
   # --- RUN STRICT VERSION STEP 1---
   osip_res_strict_step1 <- run_osip_pipeline(
@@ -606,7 +603,7 @@ for (current_delta in delta_values) {
   print("Second comparison: complete comparison and sensitivity analysis for OSIP step 2 vs all other methods\n\n")
   
   # If needed more decimal digits change the "%.3" to something else 
-  inner_folder_name_comparison <- sprintf("files_delta_%.3f_comparison", iter_params$DELTA_DP)
+  inner_folder_name_comparison <- sprintf("files_delta_%.3f_comparison", current_delta)
   full_inner_path_comparison <- file.path(base_dir_delta, inner_folder_name_comparison)
   # --- THE FIX: Create the folder if it doesn't exist ---
 

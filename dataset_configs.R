@@ -26,7 +26,7 @@
 
 
 PARAMS <- list(
-  DELTA_VALUES <- c(0.20),
+  DELTA_VALUES = c(0.20),
   SEARCHES_TO_USE = c("local_search", "enhanced_ls", "simulated_annealing"),
   SEED_IN <- 25,
   SAMPLE = c(TRUE,FALSE),
