@@ -1,119 +1,193 @@
 # --- plots.R ---
 
-plot_ps_distribution <- function(df, dataset_name, treatment_col, datasets, base_dir, title_suffix = "") {
-  # Map dataset name to the correct column
-  # Using the global datasets list logic
-  # treatment_col <- data_config$TREATMENT_VAR
-  
-  df$treat_label <- ifelse(df[[treatment_col]] == 1, "Treated", "Control")
-  df$treat_jitter <- jitter(as.numeric(df[[treatment_col]]), amount = 0.05)
-  
-  fig <- plot_ly(
-    data = df,
-    x = ~ps,
-    y = ~treat_jitter,
-    type = "scatter",
-    mode = "markers",
-    color = ~treat_label,
-    colors = c("blue", "red"),
-    hoverinfo = "text",
-    text = ~paste(
-      "Group:", treat_label,
-      "<br>Propensity Score:", round(ps, 4)
-    )
-  ) %>%
-    layout(
-      title = paste("PS Distribution:", dataset_name, title_suffix),
-      xaxis = list(title = "Propensity Score", range = c(0, 1.0)),
-      yaxis = list(title = "", showticklabels = FALSE)
-    )
-  
-  # 1. Update your path to end in .jpg
-  storing_path <- sprintf("%sps_distribution_%s.jpg", base_dir, dataset_name)
-  
-  # 1. Create the plot using ggplot
-  # We use 'text' as a dummy aesthetic for the hover info
-  p <- ggplot(df, aes(x = ps, y = treat_jitter, color = treat_label, 
-                      text = paste("Group:", treat_label, 
-                                   "\nPropensity Score:", round(ps, 4)))) +
-    geom_point(alpha = 0.7) +
-    scale_color_manual(values = c("blue", "red")) +
-    labs(
-      title = paste("PS Distribution:", dataset_name, title_suffix),
-      x = "Propensity Score",
-      y = "",
-      color = "Group"
-    ) +
-    theme_minimal() +
-    theme(
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      panel.grid.major.y = element_blank(),
-      panel.grid.minor.y = element_blank()
-    ) +
-    xlim(0, 1.0)
-  
-  # 2. Save it directly and easily
-  storing_path <- sprintf("%sps_distribution_%s.png", base_dir, dataset_name)
-  ggsave(storing_path, plot = p, width = 10, height = 8, dpi = 300)
-  
-  # Display the plot directly
-  print(fig)
-}
+# plot_ps_distribution <- function(df, dataset_name, treatment_col, datasets, base_dir, title_suffix = "") {
+#   # Map dataset name to the correct column
+#   # Using the global datasets list logic
+#   # treatment_col <- data_config$TREATMENT_VAR
+#   
+#   df$treat_label <- ifelse(df[[treatment_col]] == 1, "Treated", "Control")
+#   df$treat_jitter <- jitter(as.numeric(df[[treatment_col]]), amount = 0.05)
+#   
+#   fig <- plot_ly(
+#     data = df,
+#     x = ~ps,
+#     y = ~treat_jitter,
+#     type = "scatter",
+#     mode = "markers",
+#     color = ~treat_label,
+#     colors = c("blue", "red"),
+#     hoverinfo = "text",
+#     text = ~paste(
+#       "Group:", treat_label,
+#       "<br>Propensity Score:", round(ps, 4)
+#     )
+#   ) %>%
+#     layout(
+#       title = paste("PS Distribution:", dataset_name, title_suffix),
+#       xaxis = list(title = "Propensity Score", range = c(0, 1.0)),
+#       yaxis = list(title = "", showticklabels = FALSE)
+#     )
+#   
+#   # 1. Update your path to end in .jpg
+#   storing_path <- sprintf("%sps_distribution_%s.jpg", base_dir, dataset_name)
+#   
+#   # 1. Create the plot using ggplot
+#   # We use 'text' as a dummy aesthetic for the hover info
+#   p <- ggplot(df, aes(x = ps, y = treat_jitter, color = treat_label, 
+#                       text = paste("Group:", treat_label, 
+#                                    "\nPropensity Score:", round(ps, 4)))) +
+#     geom_point(alpha = 0.7) +
+#     scale_color_manual(values = c("blue", "red")) +
+#     labs(
+#       title = paste("PS Distribution:", dataset_name, title_suffix),
+#       x = "Propensity Score",
+#       y = "",
+#       color = "Group"
+#     ) +
+#     theme_minimal() +
+#     theme(
+#       axis.text.y = element_blank(),
+#       axis.ticks.y = element_blank(),
+#       panel.grid.major.y = element_blank(),
+#       panel.grid.minor.y = element_blank()
+#     ) +
+#     xlim(0, 1.0)
+#   
+#   # 2. Save it directly and easily
+#   storing_path <- sprintf("%sps_distribution_%s.png", base_dir, dataset_name)
+#   ggsave(storing_path, plot = p, width = 10, height = 8, dpi = 300)
+#   
+#   # Display the plot directly
+#   print(fig)
+# }
+# 
+# plot_ps_distribution_trimmed <- function(df, dataset_name, treatment_col, datasets, base_dir, title_suffix = "", is_trimmed = FALSE) {
+#   
+#   df$treat_label <- ifelse(df[[treatment_col]] == 1, "Treated", "Control")
+#   df$treat_jitter <- jitter(as.numeric(df[[treatment_col]]), amount = 0.05)
+#   
+#   # Determine Plot Boundaries
+#   # If trimmed, we zoom into the actual data range plus a small buffer
+#   if (is_trimmed) {
+#     x_min <- min(df$ps, na.rm = TRUE) - 0.02
+#     x_max <- max(df$ps, na.rm = TRUE) + 0.02
+#     file_tag <- "trimmed"
+#   } else {
+#     x_min <- 0
+#     x_max <- 1.0
+#     file_tag <- "full"
+#   }
+#   
+#   # 1. GGPLOT Version (for Saving)
+#   p <- ggplot(df, aes(x = ps, y = treat_jitter, color = treat_label)) +
+#     geom_point(alpha = 0.7, size = 2) +
+#     scale_color_manual(values = c("Control" = "blue", "Treated" = "red")) +
+#     labs(
+#       title = paste("PS Distribution:", dataset_name, title_suffix),
+#       x = "Propensity Score",
+#       y = "",
+#       color = "Group"
+#     ) +
+#     theme_minimal() +
+#     coord_cartesian(xlim = c(x_min, x_max)) + # Use coord_cartesian to zoom without dropping data
+#     theme(
+#       axis.text.y = element_blank(),
+#       axis.ticks.y = element_blank(),
+#       panel.grid.major.y = element_blank(),
+#       panel.grid.minor.y = element_blank()
+#     )
+#   
+#   # Save with a unique name so you don't overwrite the original
+#   storing_path <- sprintf("%sps_distribution_%s_%s.png", base_dir, dataset_name, file_tag)
+#   ggsave(storing_path, plot = p, width = 10, height = 6, dpi = 300)
+#   
+#   # 2. PLOTLY Version (for Interactive Display)
+#   fig <- plot_ly(data = df, x = ~ps, y = ~treat_jitter, type = "scatter", mode = "markers",
+#                  color = ~treat_label, colors = c("blue", "red")) %>%
+#     layout(
+#       title = paste("PS Distribution:", dataset_name, title_suffix),
+#       xaxis = list(title = "Propensity Score", range = c(x_min, x_max)),
+#       yaxis = list(title = "", showticklabels = FALSE)
+#     )
+#   
+#   print(fig)
+# }
 
-plot_ps_distribution_trimmed <- function(df, dataset_name, treatment_col, datasets, base_dir, title_suffix = "", is_trimmed = FALSE) {
+plot_ps_distribution <- function(df, 
+                                 dataset_name, 
+                                 treatment_col, 
+                                 base_dir, 
+                                 title_suffix = "", 
+                                 is_trimmed = FALSE) {
   
+  # 1. Prepare treatment labels
   df$treat_label <- ifelse(df[[treatment_col]] == 1, "Treated", "Control")
+  
+  # Reproducible vertical jittering
+  set.seed(12345)
   df$treat_jitter <- jitter(as.numeric(df[[treatment_col]]), amount = 0.05)
   
-  # Determine Plot Boundaries
-  # If trimmed, we zoom into the actual data range plus a small buffer
+  # 2. Determine x-axis bounds
+  # For trimmed data, round outward to clean 0.05 increments to prevent tail squeezing
   if (is_trimmed) {
-    x_min <- min(df$ps, na.rm = TRUE) - 0.02
-    x_max <- max(df$ps, na.rm = TRUE) + 0.02
+    x_min <- max(0.0, floor(min(df$ps, na.rm = TRUE) * 20) / 20)
+    x_max <- min(1.0, ceiling(max(df$ps, na.rm = TRUE) * 20) / 20 + 0.02)
     file_tag <- "trimmed"
   } else {
-    x_min <- 0
+    x_min <- 0.0
     x_max <- 1.0
     file_tag <- "full"
   }
   
-  # 1. GGPLOT Version (for Saving)
-  p <- ggplot(df, aes(x = ps, y = treat_jitter, color = treat_label)) +
-    geom_point(alpha = 0.7, size = 2) +
+  # Construct complete title
+  plot_title <- paste("PS Distribution:", dataset_name, title_suffix)
+  
+  # 3. Static Plot (ggplot2)
+  p <- ggplot(df, aes(x = ps, y = treat_jitter, color = treat_label,
+                      text = paste("Group:", treat_label, 
+                                   "\nPropensity Score:", round(ps, 4)))) +
+    geom_point(alpha = 0.7, size = 1.8) +
     scale_color_manual(values = c("Control" = "blue", "Treated" = "red")) +
     labs(
-      title = paste("PS Distribution:", dataset_name, title_suffix),
+      title = plot_title,
       x = "Propensity Score",
       y = "",
       color = "Group"
     ) +
+    coord_cartesian(xlim = c(x_min, x_max)) +
     theme_minimal() +
-    coord_cartesian(xlim = c(x_min, x_max)) + # Use coord_cartesian to zoom without dropping data
     theme(
       axis.text.y = element_blank(),
       axis.ticks.y = element_blank(),
       panel.grid.major.y = element_blank(),
-      panel.grid.minor.y = element_blank()
+      panel.grid.minor.y = element_blank(),
+      panel.grid.minor.x = element_blank()
     )
   
-  # Save with a unique name so you don't overwrite the original
-  storing_path <- sprintf("%sps_distribution_%s_%s.png", base_dir, dataset_name, file_tag)
+  # Save PNG image directly
+  storing_path <- file.path(base_dir, sprintf("ps_distribution_%s_%s.png", dataset_name, file_tag))
   ggsave(storing_path, plot = p, width = 10, height = 6, dpi = 300)
   
-  # 2. PLOTLY Version (for Interactive Display)
-  fig <- plot_ly(data = df, x = ~ps, y = ~treat_jitter, type = "scatter", mode = "markers",
-                 color = ~treat_label, colors = c("blue", "red")) %>%
+  # 4. Interactive Plot (Plotly)
+  fig <- plot_ly(
+    data = df, 
+    x = ~ps, 
+    y = ~treat_jitter, 
+    type = "scatter", 
+    mode = "markers",
+    color = ~treat_label, 
+    colors = c("blue", "red"),
+    hoverinfo = "text",
+    text = ~paste("Group:", treat_label, "<br>Propensity Score:", round(ps, 4))
+  ) %>%
     layout(
-      title = paste("PS Distribution:", dataset_name, title_suffix),
+      title = plot_title,
       xaxis = list(title = "Propensity Score", range = c(x_min, x_max)),
       yaxis = list(title = "", showticklabels = FALSE)
     )
   
   print(fig)
 }
-
-
 
 visualize_osip_step_results <- function(data_subset, cost, best_intervals, 
                                          title_suffix, method_used, 

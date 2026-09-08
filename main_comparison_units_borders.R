@@ -131,7 +131,8 @@ data_subset <- process_propensity_scores(data_subset, dataset_name, data_config,
 p_sorted <- sort(unique(c(0, 1, data_subset$ps)))
 
 message("📊 Plotting Sampled Distribution...")
-plot_ps_distribution(data_subset, dataset_name, treatment_col, datasets, base_dir, title_suffix = "(Full Population)")
+
+plot_ps_distribution(data_subset, dataset_name, treatment_col, base_dir, title_suffix = "(Full Population)", is_trimmed = FALSE)
 
 # ============================================================
 # ✅ COMMON SUPPORT TRIMMING (MODERNIZED)
@@ -193,15 +194,7 @@ if (TRIM_TO_COMMON_SUPPORT) {
   
   message(sprintf("DP Space recalibrated to: [%.4f, %.4f]", left_border, right_border))
 
-  plot_ps_distribution_trimmed(
-    df = data_subset, 
-    dataset_name = dataset_name, 
-    treatment_col = treatment_col, 
-    datasets = datasets, 
-    base_dir = base_dir, 
-    title_suffix = "(Common Support Trimmed)", 
-    is_trimmed = TRUE 
-  )
+  plot_ps_distribution(data_subset, dataset_name, treatment_col, base_dir, title_suffix = "(Common Support Trimmed)", is_trimmed = TRUE)
   
 } else {
   cat("\nNo trimming applied (TRIM_TO_COMMON_SUPPORT = FALSE)\n")

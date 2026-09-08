@@ -88,8 +88,6 @@ treatment_col <- data_config$TREATMENT_VAR
 outcome_var <- data_config$OUTCOME_VAR
 id_var <- data_config$ID_VAR
 
-# seed_in <- 25 # Move it later to the config file perhaps? 
-
 # [IMPROVED] GLOBAL FLIP FOR LINDNER
 if (dataset_name == datasets$LINDNER || dataset_name == datasets$JOBS) {
   cat("\n[!] JOBS or LINDNER detected: Creating 'treat_flipped' for matching...\n")
@@ -113,13 +111,10 @@ if (sample_flag) {
 message("📊 Calculating PS and plotting Full Population...")
 data_subset <- process_propensity_scores(data_subset, dataset_name, data_config, treatment_col, datasets, base_dir, title_suffix = "(Full Population)")
 
-# data_with_ps <- ps_results$data
-
 p_sorted <- sort(unique(c(0, 1, data_subset$ps)))
-# p_sorted <- data_subset$p_sorted
 
 message("📊 Plotting Sampled Distribution...")
-plot_ps_distribution(data_subset, dataset_name, treatment_col, datasets, base_dir, title_suffix = "(Full Population)")
+plot_ps_distribution(data_subset, dataset_name, treatment_col, base_dir, title_suffix = "(Full Population)", is_trimmed = FALSE)
 
 # ============================================================
 # ✅ COMMON SUPPORT TRIMMING (MODERNIZED)
@@ -180,16 +175,8 @@ if (TRIM_TO_COMMON_SUPPORT) {
   right_border <- p_sorted[n_p]
   
   message(sprintf("DP Space recalibrated to: [%.4f, %.4f]", left_border, right_border))
-  # Add "(Trimmed)" to the title and set is_trimmed = TRUE
-  plot_ps_distribution_trimmed(
-    df = data_subset, 
-    dataset_name = dataset_name, 
-    treatment_col = treatment_col, 
-    datasets = datasets, 
-    base_dir = base_dir, 
-    title_suffix = "(Common Support Trimmed)", 
-    is_trimmed = TRUE # <--- Key change
-  )
+  
+  plot_ps_distribution(data_subset, dataset_name, treatment_col, base_dir, title_suffix = "(Common Support Trimmed)", is_trimmed = TRUE)
   
 } else {
   cat("\nNo trimming applied (TRIM_TO_COMMON_SUPPORT = FALSE)\n")
