@@ -166,7 +166,7 @@ load_and_prep_data <- function(dataset_name, sample_flag, datasets, params) {
     data("ihdp", package = "bartcs")
     
     data_full <- ihdp
-    data_config <- IDHP_CONFIG
+    data_config <- IHDP_CONFIG
   }
   
   # ---------------------------------------------------------
