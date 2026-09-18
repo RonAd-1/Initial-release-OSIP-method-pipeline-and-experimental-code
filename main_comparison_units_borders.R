@@ -29,13 +29,10 @@ library(optrefine)
 
 source("dataset_configs.R", echo = FALSE)
 source("osip_functions.R", echo = FALSE)
-source("full_matching.R", echo = FALSE)
-source("cem.R", echo = FALSE)
-source("plots.R", echo = FALSE)
 source("complete_comparison.R", echo = FALSE)
 source("heuristic_units.R", echo = FALSE)
-source("cochran_quintile.R", echo = FALSE)
 source("borders_helping_functions.R", echo = FALSE)
+source("plots.R", echo = FALSE)
 
 # Load your choice from dataset_configs.R file
 datasets <- DATASET_CHOICES
@@ -49,10 +46,10 @@ matching_non_1_1 <- METHODS_NON_1_TO_1_MATCHING
 # Uncomment the relevant dataset
 
 # dataset_name <- DATASET_CHOICES$RHC
-# dataset_name <- DATASET_CHOICES$NSW_MIXTAPE
-dataset_name <- DATASET_CHOICES$LINDNER
+dataset_name <- DATASET_CHOICES$NSW_MIXTAPE
+# dataset_name <- DATASET_CHOICES$LINDNER
 # dataset_name <- DATASET_CHOICES$JOBS
-# dataset_name <- DATASET_CHOICES$IDHP
+# dataset_name <- DATASET_CHOICES$IHDP
 # dataset_name <- DATASET_CHOICES$NHEFS
 
 # Container for results
@@ -325,7 +322,6 @@ start_time = start_timer()
 # Main Script Execution
 cardinality_res <- execute_and_standardize(
   matching_func  = run_cardinality, 
-  # func_args      = list(data = cov_df_standardized, config = data_config), 
   label          = METHOD_LABELS[Methods$cardinality_1_1], 
   data           = cov_df_standardized, 
   config         = data_config,
@@ -353,11 +349,11 @@ if (!is.null(cardinality_res)) {
 
 end_timer(start_time, "Cardinality matching")
 
-# Only exclude it for the IDHP dataset 
-if (dataset_name == datasets$IDHP) {
-  formula_cem_idhp <- reformulate(termlabels = IDHP_CONFIG$CEM_SUBSET_COVARIATES, 
-                                  response = IDHP_CONFIG$TREATMENT_VAR)
-  cem_res <- run_cem(cov_df_standardized, data_config, treatment_col, formula_cem_idhp)
+# Only exclude it for the IHDP dataset 
+if (dataset_name == datasets$IHDP) {
+  formula_cem_ihdp <- reformulate(termlabels = IHDP_CONFIG$CEM_SUBSET_COVARIATES, 
+                                  response = IHDP_CONFIG$TREATMENT_VAR)
+  cem_res <- run_cem(cov_df_standardized, data_config, treatment_col, formula_cem_ihdp)
 } else {
   cem_res <- run_cem(cov_df_standardized, data_config, treatment_col, match_formula)
 }
@@ -412,7 +408,7 @@ unmatched_res <- list(data_matched = cov_df_standardized %>% mutate(weights = 1)
 
 for (current_delta in delta_values) {
   
-  cat(sprintf("\n\n>>> STARTING ANALYSIS FOR DELTA = %.3f <<<\n", current_delta))
+  cat(sprintf("\n\n>>> STARTING OSIP ANALYSIS FOR DELTA = %.3f <<<\n", current_delta))
   
   power <- sprintf("power_%g", dist_power)
   

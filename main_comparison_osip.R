@@ -29,7 +29,6 @@ source("dataset_configs.R", echo = FALSE)
 source("osip_functions.R", echo = FALSE)
 source("plots.R", echo = FALSE)
 source("complete_comparison.R", echo = FALSE)
-source("original_distance_for_intervals.R", echo = FALSE)
 source("heuristic_units.R", echo = FALSE)
 source("borders_helping_functions.R", echo = FALSE)
 
@@ -40,6 +39,8 @@ delta_values <- params$DELTA_VALUES
 methods <- Methods
 method_labels <- METHOD_LABELS
 matching_non_1_1 <- METHODS_NON_1_TO_1_MATCHING
+
+# Uncomment the relevant dataset
 
 # dataset_name <- DATASET_CHOICES$RHC
 # dataset_name <- DATASET_CHOICES$NSW_MIXTAPE

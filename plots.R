@@ -428,3 +428,71 @@ plot_rosenbaum <- function(results, alpha = 0.05, title = "Rosenbaum Sensitivity
     message("✓ Sensitivity plot saved to: ", save_path)
   }
 }
+
+plot_match_barplot_hist <- function(distances_vector,
+                                    method_name,
+                                    base_dir,
+                                    max_val_for_plot = NULL,
+                                    n_bins = 10,
+                                    current_delta = NULL) {
+  
+  # 1. Clipping and Data Prep
+  actual_max <- max(distances_vector, na.rm = TRUE)
+  limit_val <- if (is.null(max_val_for_plot)) actual_max else min(max_val_for_plot, actual_max)
+  
+  # KEY FIX: drop NA/NaN/Inf before the <= comparison
+  filtered_distances <- distances_vector[is.finite(distances_vector) & distances_vector <= limit_val]
+  plot_df <- data.frame(dist = filtered_distances)
+  bin_width <- limit_val / n_bins
+  # axis_breaks <- seq(0, limit_val, by = bin_width)
+  
+  # 2. Subtitle logic
+  subtitle_text <- paste("Intervals:", n_bins)
+  file_suffix <- ""
+  if (!is.null(current_delta)) {
+    subtitle_text <- paste0("Delta: ", current_delta, " | ", subtitle_text)
+    file_suffix <- sprintf("_delta_%.2f", current_delta)
+  }
+  
+  # Pre-compute breaks once, used for both histogram and axis
+  bin_breaks <- seq(0, limit_val, length.out = n_bins + 1)
+  
+  p <- ggplot(plot_df, aes(x = dist)) +
+    # Use breaks= instead of bins= for exact alignment
+    geom_histogram(fill = "steelblue", color = "white", alpha = 0.8,
+                   breaks = bin_breaks) +
+    
+    stat_bin(aes(label = after_stat(count)), breaks = bin_breaks,
+             geom = "text", vjust = -0.5, size = 4, fontface = "bold") +
+    
+    scale_x_continuous(breaks = bin_breaks,
+                       labels = function(x) sprintf("%.2f", x)) +
+    
+    coord_cartesian(xlim = c(0, limit_val)) +
+    
+    labs(title = paste("Distance Distribution:", method_name),
+         subtitle = subtitle_text,
+         x = "Mahalanobis Distance",
+         y = "Number of Pairs (Count)") +
+    theme_minimal()
+  
+  # 4. Safe Naming Logic
+  clean_label <- gsub("[^[:alnum:]]", "_", method_name)
+  clean_label <- gsub("_+", "_", clean_label)
+  file_name <- paste0("dist_", clean_label, file_suffix, ".png")
+  full_path <- file.path(base_dir, file_name)
+  
+  # 5. Directory and Save
+  if (!dir.exists(base_dir)) dir.create(base_dir, recursive = TRUE)
+  
+  tryCatch({
+    ggsave(filename = full_path, plot = p, width = 8, height = 5, device = "png")
+    if (file.exists(full_path)) {
+      cat("Successfully saved:", file_name, "(", file.size(full_path), "bytes)\n")
+    }
+  }, error = function(e) {
+    message("SAVE FAILED for ", method_name, ": ", e$message)
+  })
+  
+  return(p)
+}

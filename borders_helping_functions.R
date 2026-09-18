@@ -76,10 +76,6 @@ create_osip_matching <- function(final_intervals,
       )
     )
   
-  # The acutal matching cost
-  # total_actual_cost <- sum(map_osip$cost, na.rm = TRUE)
- 
-  
   # ------------------------------------------------------------------
   # 3. Export matching report
   # ------------------------------------------------------------------
@@ -87,18 +83,6 @@ create_osip_matching <- function(final_intervals,
     "matching_output_%s_%s_delta_%.2f.txt",
     tolower(dist_type_name), step_label, current_delta
   )
-  
-  
-  # # This is clean, safe, and handles the slashes for you
-  # sens_path <- file.path(
-  #   base_dir, 
-  #   "sensitivity_plots"
-  # )
-  # 
-  # # 🚨 Just make sure to create the directory before saving!
-  # if (!dir.exists(sens_path)) {
-  #   dir.create(sens_path, recursive = TRUE)
-  # }
   
   export_matching_report(
     map_osip, 
@@ -148,17 +132,6 @@ create_osip_matching <- function(final_intervals,
     title     = plot_title,
     save_path = sens_plot_path
   )
-  
-  # This is clean, safe, and handles the slashes for you
-  # dist_path <- file.path(
-  #   base_dir, 
-  #   "distance_distribution"
-  # )
-  # 
-  # # 🚨 Just make sure to create the directory before saving!
-  # if (!dir.exists(dist_path)) {
-  #   dir.create(dist_path, recursive = TRUE)
-  # }
   
   # ------------------------------------------------------------------
   # 6. Distance distribution plot
@@ -524,7 +497,6 @@ run_quintile <- function(data, config, treatment_col, label, n_subclasses = 5, .
     stringsAsFactors = FALSE
   ) %>% filter(!is.na(control_id))
   
-  # --- THE FIX: ADD THE COST COLUMN ---
   # Generate distance matrix for the units in this specific matching run
   dist_matrix <- as.matrix(match_on(match_formula, data = df_for_optimal, method = "mahalanobis"))
   
@@ -557,10 +529,8 @@ run_refined_quintile <- function(data, config, treatment_col, label, quintile_re
   }
   
   df_internal <- quintile_res$data_matched
-  
-  # --- UPDATED SUBCLASS ASSIGNMENT ---
+
   # Only pull subclasses for the units that exist in df_internal
-  # --- UPDATED SUBCLASS ASSIGNMENT & NA REMOVAL ---
   if ("subclass_id" %in% colnames(df_internal)) {
     # Keep only units that have a valid quintile assignment
     df_internal <- df_internal[!is.na(df_internal$subclass_id), ]
@@ -570,7 +540,7 @@ run_refined_quintile <- function(data, config, treatment_col, label, quintile_re
     base_strata <- as.factor(df_internal$subclass) 
   }
   
-  # 2. Optimization: Refine strata
+  # Optimization: Refine strata
   z <- as.numeric(as.character(df_internal[[treatment_col]]))
   
   # --- THE ROBUST FIX: Use model.matrix to ensure X is numeric ---
@@ -722,6 +692,39 @@ run_optimal_1_1 <- function(data,
   ))
 }
 
+run_cem <- function(data, col_config, treatment_col, formula_cem) {
+
+  # 1. Attempt the match using tryCatch to handle "No units matched" errors
+  m.out <- tryCatch({
+    matchit(formula_cem, 
+            data = data, 
+            method = "cem", 
+            k2k = FALSE)
+  }, error = function(e) {
+    # If matchit fails (e.g., no units matched), return the error object or NULL
+    return(NULL)
+  })
+  
+  # 2. Check if m.out is NULL or if zero weights were assigned
+  if (is.null(m.out) || sum(m.out$weights > 0) == 0) {
+    cat("CEM failed: No units were matched. Skipping CEM for this run.\n")
+    return(NULL) # Return NULL so the calling script can skip this method
+  }
+  
+  # 3. If we have matches, proceed as normal
+  matched_data <- match.data(m.out, data = data)
+  
+  # Standardize naming for your comparison function
+  if ("subclass" %in% names(matched_data)) {
+    matched_data <- matched_data %>% rename(match_id = subclass)
+  }
+  
+  return(list(
+    data_matched = matched_data,
+    m_out = m.out
+  ))
+}
+
 run_cardinality <- function(data, config, treatment_col, label = "Cardinality (1:1)", ...) {
   cat("\n--- Running Cardinality (IP Solver) ---\n")
   
@@ -854,6 +857,117 @@ run_genetic <- function(data,
   ))
 }
 
+run_quintile_matching <- function(data, 
+                                  config = col_config, 
+                                  n_subclasses = 5, 
+                                  method_label = "Quintile (1:1)") {
+  
+  df_internal <- as.data.frame(data)
+  treat_var <- config$TREATMENT_VAR
+  
+  # Step A: Subclassification
+  m_sub <- matchit(as.formula(paste(treat_var, "~ ps")), 
+                   data = df_internal, 
+                   method = "subclass", 
+                   subclass = n_subclasses)
+  
+  df_internal$subclass_id <- m_sub$subclass
+  df_for_optimal <- df_internal[!is.na(df_internal$subclass_id), ]
+  
+  if (length(unique(df_for_optimal[[treat_var]])) < 2) {
+    warning("Insufficient common support.")
+    return(NULL)
+  }
+  
+  match_formula <- reformulate(termlabels = config$ALL_COVARIATES, response = treat_var)
+  
+  # Step B: Optimal Matching within subclasses
+  # This produces a MatchIt object with an underlying 'optmatch' structure
+  m_quint <- matchit(match_formula, 
+                     data = df_for_optimal,
+                     method = "optimal",
+                     distance = "mahalanobis",
+                     exact = ~ subclass_id)
+  
+  # Map weights back
+  df_internal$weights <- 0 
+  df_internal[names(m_quint$weights), "weights"] <- m_quint$weights
+  df_matched <- df_internal[df_internal$weights > 0, ]
+  
+  # NEW: Create the match_map immediately using the internal match.matrix
+  # This follows the pattern of your other 'pairing_res' objects
+  matches <- m_quint$match.matrix
+  match_map <- data.frame(
+    treated_id = rownames(matches),
+    control_id = matches[, 1],
+    stringsAsFactors = FALSE
+  ) %>% filter(!is.na(control_id))
+  
+  # Return standardized list
+  return(list(
+    data_matched = df_matched,
+    match_map    = match_map,        # Explicit map
+    m_out_stage1 = m_sub,            # The subclassification stage
+    m_out_stage2 = m_quint,          # The optimal matching stage
+    method       = method_label,
+    n_original   = nrow(df_internal),
+    n_matched    = nrow(df_matched)
+  ))
+}
+
+run_full_match <- function(
+    cov_df,
+    treatment_col,
+    ps_col,
+    covariates,
+    seed = 123
+) {
+  
+  start_time <- Sys.time()
+  set.seed(seed)
+  
+  # Ensure MatchIt and optmatch are loaded
+  if (!requireNamespace("MatchIt", quietly = TRUE)) stop("Please install 'MatchIt'")
+  if (!requireNamespace("optmatch", quietly = TRUE)) stop("Please install 'optmatch'")
+  
+  # Formula for matching
+  formula_str <- as.formula(paste(treatment_col, "~", 
+                                  paste(c(covariates, ps_col), collapse = " + ")))
+  
+  # Step 1: Run Full Matching
+  # We use the Mahalanobis distance within the Full Match
+  m.out <- MatchIt::matchit(
+    formula = formula_str,
+    data = cov_df,
+    method = "full",
+    distance = "mahalanobis"
+  )
+  
+  # Step 2: Extract matched data
+  matched_data <- MatchIt::match.data(m.out)
+  
+  # Step 3: Build the match_map
+  # In Full Match, we map treated units to their corresponding subclass
+  # For Rosenbaum Sensitivity, we need to treat subclasses as the 'pairs'
+  # Note: Standard Rosenbaum works best on pairs, but can be adapted for sets.
+  
+  match_map <- data.frame(
+    id = rownames(matched_data),
+    subclass = matched_data$subclass,
+    treated = matched_data[[treatment_col]],
+    weights = matched_data$weights
+  )
+  
+  end_time <- Sys.time()
+  
+  return(list(
+    data_matched = matched_data,
+    match_map    = match_map,
+    m_out        = m.out,
+    time         = as.numeric(difftime(end_time, start_time, units = "secs"))
+  ))
+}
+
 get_imbalanced_covariates <- function(bal_obj, threshold = 0.1) {
   if (is.null(bal_obj)) return(character(0))
   
@@ -938,263 +1052,7 @@ analyze_covariate_distribution <- function(data, cov_name, treatment_var = "trea
       scale_fill_manual(values = c("Control" = "#7FB3D5", "Treated" = "#E67E22")) +
       # Add a clear baseline at zero
       geom_hline(yintercept = 0, color = "black", linewidth = 0.5)
-    
-    # Optional: Uncomment the next line if you prefer horizontal orientation
-    # p <- p + coord_flip() 
   }
   
   return(p)
-}
-
-check_control_selection_integrity <- function(original_data, 
-                                              matched_data  = NULL, 
-                                              cov_name, 
-                                              step_label    = "initial", 
-                                              metric_label  = "none", 
-                                              is_initial    = FALSE,
-                                              treatment_col,
-                                              n_bins        = 10, 
-                                              base_dir, 
-                                              delta         = NULL) {
-  
-  # 1. Directory Setup
-  folder_name <- if(is_initial) "control_integrity_baseline" else 
-    sprintf("control_integrity_delta_%g_%s", delta, tolower(metric_label))
-  
-  dist_dir <- file.path(base_dir, folder_name)
-  if (!dir.exists(dist_dir)) dir.create(dist_dir, recursive = TRUE)
-  
-  # 2. Data Preparation
-  # Extract relevant controls
-  raw_ctrl <- original_data %>% dplyr::filter(!!sym(treatment_col) == 0) %>% 
-    dplyr::select(val = !!sym(cov_name)) %>% dplyr::mutate(Source = "Original Pool")
-  
-  if (!is_initial) {
-    match_ctrl <- matched_data %>% dplyr::filter(!!sym(treatment_col) == 0) %>% 
-      dplyr::select(val = !!sym(cov_name)) %>% dplyr::mutate(Source = "Matched Subset")
-    plot_df <- rbind(raw_ctrl, match_ctrl)
-  } else {
-    plot_df <- raw_ctrl
-  }
-  
-  # 1. ALWAYS calculate max_val from the original pool to anchor the X-axis
-  global_max <- max(original_data[[cov_name]], na.rm = TRUE)
-  
-  # 2. Refined Breaks (Zero + Balanced Bins)
-  # We use 0.01 as the 'dead zone' for absolute zeros
-  breaks <- c(-0.01, 0.01, seq(0.02, global_max, length.out = n_bins))
-  
-  # 3. Intelligent Labeling (Avoids $0k-0k)
-  # If a value is below 1000, we show it in dollars; else in 'k'
-  format_bin <- function(x) {
-    if (x == 0.01) return("0")
-    if (x < 1000) return(paste0(round(x)))
-    return(paste0(round(x/1000, 1), "k"))
-  }
-  
-  bin_labels <- c("$0")
-  for (i in 2:(length(breaks)-1)) {
-    bin_labels <- c(bin_labels, paste0("$", format_bin(breaks[i]), "-", format_bin(breaks[i+1])))
-  }
-  
-  # 4. Apply to the plot_df
-  plot_df <- plot_df %>%
-    mutate(bin = cut(val, breaks = breaks, include.lowest = TRUE, labels = bin_labels))
-  
-  # 4. Create the Bar Plot (Counts)
-  p <- ggplot(plot_df, aes(x = bin, fill = Source)) +
-    geom_bar(position = "dodge") + # Side-by-side counts
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.position = "bottom") +
-    scale_fill_manual(values = c("Original Pool" = "#95a5a6", 
-                                 "Matched Subset" = ifelse(tolower(metric_label) == "strict", "#8E44AD", "#27AE60"))) +
-    labs(title = paste("Control Selection Count Check:", cov_name),
-         subtitle = if(is_initial) "Baseline Count" else sprintf("Metric: %s | Delta: %g", metric_label, delta),
-         x = "Value Bins", y = "Number of Control Units (Count)")
-  
-  # 5. Save
-  file_suffix <- if(is_initial) "baseline" else tolower(metric_label)
-  file_name   <- sprintf("integrity_counts_%s_%s.png", cov_name, file_suffix)
-  
-  ggplot2::ggsave(filename = file.path(dist_dir, file_name), 
-                  plot = p, width = 12, height = 7, dpi = 300)
-  
-  return(p)
-}
-
-plot_match_barplot_hist <- function(distances_vector, 
-                                    method_name, 
-                                    base_dir, 
-                                    max_val_for_plot = NULL, 
-                                    n_bins = 10,
-                                    current_delta = NULL) {
-  
-  # 1. Clipping and Data Prep
-  actual_max <- max(distances_vector, na.rm = TRUE)
-  limit_val <- if (is.null(max_val_for_plot)) actual_max else min(max_val_for_plot, actual_max)
-  
-  # KEY FIX: drop NA/NaN/Inf before the <= comparison
-  filtered_distances <- distances_vector[is.finite(distances_vector) & distances_vector <= limit_val]
-  plot_df <- data.frame(dist = filtered_distances)
-  bin_width <- limit_val / n_bins
-  # axis_breaks <- seq(0, limit_val, by = bin_width)
-  
-  # 2. Subtitle logic
-  subtitle_text <- paste("Intervals:", n_bins)
-  file_suffix <- ""
-  if (!is.null(current_delta)) {
-    subtitle_text <- paste0("Delta: ", current_delta, " | ", subtitle_text)
-    file_suffix <- sprintf("_delta_%.2f", current_delta)
-  }
-  
-  # Pre-compute breaks once, used for both histogram and axis
-  bin_breaks <- seq(0, limit_val, length.out = n_bins + 1)
-  
-  p <- ggplot(plot_df, aes(x = dist)) +
-    # Use breaks= instead of bins= for exact alignment
-    geom_histogram(fill = "steelblue", color = "white", alpha = 0.8, 
-                   breaks = bin_breaks) +
-    
-    stat_bin(aes(label = after_stat(count)), breaks = bin_breaks,
-             geom = "text", vjust = -0.5, size = 4, fontface = "bold") +
-    
-    scale_x_continuous(breaks = bin_breaks, 
-                       labels = function(x) sprintf("%.2f", x)) + 
-    
-    coord_cartesian(xlim = c(0, limit_val)) +
-    
-    labs(title = paste("Distance Distribution:", method_name),
-         subtitle = subtitle_text,
-         x = "Mahalanobis Distance", 
-         y = "Number of Pairs (Count)") +
-    theme_minimal()
-  
-  # 4. Safe Naming Logic
-  clean_label <- gsub("[^[:alnum:]]", "_", method_name)
-  clean_label <- gsub("_+", "_", clean_label)
-  file_name <- paste0("dist_", clean_label, file_suffix, ".png")
-  full_path <- file.path(base_dir, file_name)
-  
-  # 5. Directory and Save
-  if (!dir.exists(base_dir)) dir.create(base_dir, recursive = TRUE)
-  
-  tryCatch({
-    ggsave(filename = full_path, plot = p, width = 8, height = 5, device = "png")
-    if (file.exists(full_path)) {
-      cat("Successfully saved:", file_name, "(", file.size(full_path), "bytes)\n")
-    }
-  }, error = function(e) {
-    message("SAVE FAILED for ", method_name, ": ", e$message)
-  })
-  
-  return(p)
-}
-
-generate_control_integrity_table <- function(original_data, matched_list, cov_name, 
-                                             treatment_col, delta_dp,
-                                             base_dir, power, n_bins = 10) {
-  
-  # 1. Source of Truth: Controls in original dataset
-  pool_ctrls <- original_data %>% dplyr::filter(!!sym(treatment_col) == 0)
-  pool_vals <- pool_ctrls[[cov_name]]
-  pool_vals <- pool_vals[!is.na(pool_vals)]
-  
-  # 2. Dynamic 'Ruler' (Breaks based on actual data bounds)
-  val_min <- min(pool_vals)
-  val_max <- max(pool_vals)
-  
-  # Avoid zero-range crash if all values are identical
-  if (val_min == val_max) {
-    val_min <- val_min - 0.001
-    val_max <- val_max + 0.001
-  }
-  
-  # Create linear bin breaks across the continuous range
-  core_breaks <- seq(val_min, val_max, length.out = n_bins + 1)
-  
-  # 3. Dynamic Smart Label Generator (Clean numbers, no unit symbols)
-  data_range <- val_max - val_min
-  decimals <- if (data_range < 1) 3 else if (data_range < 10) 2 else 1
-  
-  format_num <- function(x) formatC(x, format = "f", digits = decimals)
-  
-  cell_labels <- character(n_bins)
-  for (i in 1:n_bins) {
-    if (i == n_bins) {
-      # Inclusive upper bound for the final bin
-      cell_labels[i] <- sprintf("[%s, %s]", format_num(core_breaks[i]), format_num(core_breaks[i+1]))
-    } else {
-      # Half-open interval for intermediate bins
-      cell_labels[i] <- sprintf("[%s, %s)", format_num(core_breaks[i]), format_num(core_breaks[i+1]))
-    }
-  }
-  
-  # 4. Helper: Pull FRESH values using IDs and count them dynamically
-  get_counts <- function(res_df, label_name) {
-    ctrl_ids <- res_df$id[res_df[[treatment_col]] == 0]
-    
-    target_vals <- original_data %>% 
-      dplyr::filter(id %in% ctrl_ids) %>% 
-      dplyr::pull(!!sym(cov_name))
-    
-    target_vals <- target_vals[!is.na(target_vals)]
-    n_total <- length(target_vals)
-    if (n_total == 0) return(NULL)
-    
-    # Standard dynamic binning
-    binned_factors <- cut(
-      target_vals, 
-      breaks = core_breaks, 
-      include.lowest = TRUE, 
-      right = FALSE, 
-      labels = cell_labels
-    )
-    
-    res <- as.data.frame(table(factor(binned_factors, levels = cell_labels)))
-    colnames(res) <- c("bin", paste0(label_name, "_Count"))
-    
-    return(res)
-  }
-  
-  # 5. Build Table (Counts only)
-  final_df <- get_counts(original_data, "Original_Pool")
-  for (m_name in names(matched_list)) {
-    m_stats <- get_counts(matched_list[[m_name]], m_name)
-    if (!is.null(m_stats)) final_df <- left_join(final_df, m_stats, by = "bin")
-  }
-  
-  # 6. Add Totals Row
-  totals <- data.frame(bin = "TOTAL")
-  count_cols <- grep("_Count", colnames(final_df), value = TRUE)
-  for (col in count_cols) {
-    totals[[col]] <- sum(final_df[[col]], na.rm = TRUE)
-  }
-  
-  final_df <- bind_rows(final_df, totals)
-  
-  # Save Output
-  out_file <- file.path(base_dir, sprintf("integrity_%s_delta_%g_%s.csv", cov_name, delta_dp, power))
-  write.csv(final_df, out_file, row.names = FALSE)
-  
-  return(final_df)
-}
-
-run_automated_comparison <- function(original_pool, results_list, covariates, base_dir) {
-  
-  # 1. Prepare the list of dataframes for the integrity table
-  # We extract the 'data_matched' object from each result
-  matched_dfs <- lapply(results_list, function(res) res$data_matched)
-  
-  # 2. Loop through each covariate you want to check (e.g., re74, re75)
-  for (cov in covariates) {
-    message("--- Processing Integrity Table for: ", cov, " ---")
-    
-    generate_control_integrity_table(
-      original_data = original_pool,
-      matched_list = matched_dfs,
-      cov_name = cov,
-      base_dir = base_dir
-    )
-  }
 }
