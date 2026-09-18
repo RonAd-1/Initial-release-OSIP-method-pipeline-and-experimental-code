@@ -52,6 +52,7 @@ dataset_name <- DATASET_CHOICES$LINDNER
 # Container for results
 delta_sweep_results <- list()
 
+# Only need to change it if you want to test the different powers of the L^p norm.
 dist_power <- 1
 
 target_dir <- file.path(
