@@ -100,7 +100,7 @@ DATASET_CHOICES <- list(
   RHC = "rhc",
   LINDNER = "lindner",
   JOBS = "jobs",
-  IDHP = "idhp",
+  IHDP = "ihdp",
   NHEFS = "nhefs"
 )
 
@@ -115,10 +115,10 @@ JOBS_CONFIG <- list(
   ALL_COVARIATES     =  c("age", "educ", "income", "econ_hard", "depress1", "sex", "marital", "nonwhite")
 )
 
-# IDHP_CONFIG 
+# IHDP_CONFIG 
 
-# 3. Configuration for the IDHP dataset (X1-X25 format)
-IDHP_CONFIG <- list(
+# 3. Configuration for the IHDP dataset (X1-X25 format)
+IHDP_CONFIG <- list(
   # Core variables
   TREATMENT_VAR = "treatment",  # adjust if different (e.g., "treat")
   OUTCOME_VAR = "y_factual",    # the observed outcome
@@ -126,8 +126,6 @@ IDHP_CONFIG <- list(
   
   # Covariates for matching (X1-X25)
   ALL_COVARIATES = paste0("X", 1:25),
-  
-  # CEM_SUBSET_COVARIATES = c(paste0("X", 1:6), "X7", "X8"),
   
   CEM_SUBSET_COVARIATES = paste0("X", 1:6),
   

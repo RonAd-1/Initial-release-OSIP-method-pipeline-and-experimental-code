@@ -48,32 +48,26 @@ load_and_prep_data <- function(dataset_name, sample_flag, datasets, params) {
   
   data_full <- NULL
   data_subset <- NULL
-  # n_control_sample <- params$N_CONTROL_SAMPLE
-  # data_config <- NULL
-  
+ 
   # ---------------------------------------------------------
   # PATH 1: LALONDE
   # ---------------------------------------------------------
   if (dataset_name == datasets$LALONDE) {
-    
-    # if (!require(MatchIt)) library(MatchIt()
-    if (!require(causalsens)) install.packages("Personalized")
-    library(causalsens)
     data(lalonde.psid)
     data_full <- lalonde
     data_config <- LALONDE_CONFIG
     
-    # ---------------------------------------------------------
-    # PATH 2: NSW_MIXTAPE
-    # ---------------------------------------------------------
+  # ---------------------------------------------------------
+  # PATH 2: NSW_MIXTAPE
+  # ---------------------------------------------------------
   } else if (dataset_name == datasets$NSW_MIXTAPE) {
     data(nsw_mixtape)
     data_full <- nsw_mixtape
     data_config <- NSW_MIXTAPE_CONFIG
     
-    # ---------------------------------------------------------
-    # PATH 3: RHC (Requires heavy transformation)
-    # ---------------------------------------------------------
+  # ---------------------------------------------------------
+  # PATH 3: RHC 
+  # ---------------------------------------------------------
     
     
   } else if (dataset_name == datasets$RHC) {
@@ -105,6 +99,10 @@ load_and_prep_data <- function(dataset_name, sample_flag, datasets, params) {
       tidyr::drop_na(all_of(required_cols))
     
     cat(sprintf("RHC Prep: %d rows dropped due to NAs.\n", nrow(rhc_raw) - nrow(data_full)))
+    
+  # ---------------------------------------------------------
+  # PATH 4: LINDNER 
+  # ---------------------------------------------------------
     
   } else if (dataset_name == datasets$LINDNER) {
     data(lindner)
@@ -159,13 +157,21 @@ load_and_prep_data <- function(dataset_name, sample_flag, datasets, params) {
     }
   }
   
-  else if (dataset_name == datasets$IDHP) {
+  # ---------------------------------------------------------
+  # PATH 5: IHDP 
+  # ---------------------------------------------------------
+  
+  else if (dataset_name == datasets$IHDP) {
  
     data("ihdp", package = "bartcs")
     
     data_full <- ihdp
     data_config <- IDHP_CONFIG
   }
+  
+  # ---------------------------------------------------------
+  # PATH 6: NHEFS 
+  # ---------------------------------------------------------
   
   else if (dataset_name == datasets$NHEFS) {
   
@@ -178,11 +184,6 @@ load_and_prep_data <- function(dataset_name, sample_flag, datasets, params) {
   else {
     stop(sprintf("Dataset '%s' not recognized. Check datasets.", dataset_name))
   }
-  
-  # ---------------------------------------------------------
-  # FINAL STANDARDIZATION (Applies to all)
-  # ---------------------------------------------------------
-  # treatment_col <- data_config$TREATMENT_VAR
   
   # Ensure an ID column exists based on config
   if (!(data_config$ID_VAR %in% names(data_full))) {
@@ -197,8 +198,6 @@ load_and_prep_data <- function(dataset_name, sample_flag, datasets, params) {
 
 sample_dataset <- function(seed_in, treat_col, data_full, dataset_name, params) {
     set.seed(seed_in)
-    # treat_col = data_config$TREATMENT_VAR
-    # --- DEFINE LOCAL IDs FOR SAMPLING ---
     # We create these here so they are available for the sample() function
     treated_ids <- data_full$id[data_full[[treatment_col]] == 1]
     control_ids <- data_full$id[data_full[[treatment_col]] == 0]
@@ -235,18 +234,6 @@ sample_dataset <- function(seed_in, treat_col, data_full, dataset_name, params) 
 }
 
 process_propensity_scores <- function(data_subset, dataset_name, data_config, treatment_col, datasets, base_dir, title_suffix = "") {
-  # 1. Determine columns based on dataset_name
-  # treat_col <- if(dataset_name == "rhc") "swang1" else "treat"
-  # treatment_col <- data_config$TREATMENT_VAR
-  # Assuming covariates are known or handled via a different logic
-  # For now, using all columns except ID and Treatment
-  # TREAT_COL <- data_config$TREATMENT_VAR
-  # NUM_COV   <- data_config$NUMERIC_COVARIATES
-  # 
-  # # 1. Select relevant columns (ID, PS, Treat, and Numerics)
-  # cols_to_keep <- c(data_config$ID_VAR, "ps", TREAT_COL, NUM_COV)
-  # 
-  # ps_formula <- as.formula(paste(treat_col, "~", paste(covs, collapse = " + ")))
   
   # Use the configured treatment and ALL covariates
   ps_formula <- as.formula(
@@ -282,7 +269,7 @@ get_treatment_control_scores <- function(treatment_map, data_subset, id_var, tre
   # For Treated:
   treatment_ids <- treatment_map[[id_var]]
   treatment_scores <- treatment_map$ps
-  # 🆕 Explicitly name the vector
+  # Explicitly name the vector
   names(treatment_scores) <- treatment_ids
   
   valid_mask <- !is.na(treatment_scores) & !is.nan(treatment_scores)
@@ -291,7 +278,7 @@ get_treatment_control_scores <- function(treatment_map, data_subset, id_var, tre
   # For Controls:
   controls_df <- data_subset[data_subset[[treatment_col]] == 0, ]
   control_scores <- controls_df$ps
-  # 🆕 Explicitly name the vector
+  # Explicitly name the vector
   names(control_scores) <- controls_df[[id_var]]
   
   valid_ctrl <- !is.na(control_scores) & !is.nan(control_scores)
@@ -321,8 +308,7 @@ run_osip_step1 <- function(data_subset, params, id_var, p_sorted,
       treatment_scores = treatment_scores, 
       control_scores = control_scores, 
       k_bound  = k_bound, 
-      # n_r      = n_r, 
-      delta_dp    = delta_dp, 
+      delta_dp  = delta_dp, 
       treatment_col = treatment_col, 
       cov_df   = data_subset, 
       p_sorted = p_sorted,
@@ -337,8 +323,6 @@ run_osip_step1 <- function(data_subset, params, id_var, p_sorted,
   return(solution)
 }
 
-#' Step 2: Heuristic Local Search (Refining Covariate Balance)
-#' Step 2: Heuristic Local Search Wrapper
 run_osip_step2_heuristics <- function(osip_res_step_1, initial_cost, initial_bounds, 
                                        initial_intervals, cov_df, params, 
                                        data_config, p_sorted, 
@@ -437,10 +421,6 @@ prepare_standardized_data <- function(data_subset, data_config, treatment_col) {
   temp_df <- data_subset
   covariates <- data_config$NUMERIC_COVARIATES
   
-  # 1. Select relevant columns (ID, PS, Treat, and Numerics)
-  # cols_to_keep <- c(data_config$ID_VAR, "ps", treatment_col, covariates, data_config$OUTCOME_VAR)
-  # cov_df_lim <- data_subset[, cols_to_keep, drop = FALSE]
-  
   # Ensure Treatment is numeric
   temp_df[[treatment_col]] <- ensure_numeric_col(temp_df, treatment_col)
   
@@ -450,8 +430,6 @@ prepare_standardized_data <- function(data_subset, data_config, treatment_col) {
     temp_df[[var]] <- ensure_numeric_col(temp_df, var)
   }
     
-    # as.numeric(as.character(cov_df_original[[treatment_col]]))
-  
   # 2. Split data to calculate pooled variance
   control_data <- temp_df[temp_df[[treatment_col]] == 0, covariates, drop = FALSE]
   treated_data <- temp_df[temp_df[[treatment_col]] == 1, covariates, drop = FALSE]
@@ -477,13 +455,8 @@ prepare_standardized_data <- function(data_subset, data_config, treatment_col) {
     cov_df_standardized[[var]] <- temp_df[[var]] / cov_sds[var]
   }
   
-  cat("✓ Standardization complete.\n")
+  cat("Standardization complete!.\n")
   return (cov_df_standardized)
-  # return(list(
-  #   original = cov_df_original,
-  #   standardized = cov_df_standardized,
-  #   pooled_sds = cov_sds
-  # ))
 }
   
 #' Execute a search function dynamically
@@ -526,8 +499,6 @@ perform_osip_matching <- function(data_subset, final_intervals,
                                            params, data_config, treatment_col, distance_metric) {
 
   cat("\n--- Performing Final Bin-Exact Matching ---\n")
-  #treatment_col <- data_config$TREATMENT_VAR
-
   # 1. Create PS Bins
 
   # 1. Initialize the bin column
@@ -567,8 +538,7 @@ perform_osip_matching <- function(data_subset, final_intervals,
     ratio = 1
   )
 
-  # --- NEW EXTRACTION LOGIC STARTS HERE ---
-  # This section creates the 'match_map' that was missing/empty
+  # This section creates the 'match_map' (mm) 
   mm <- m_out$match.matrix
 
   # Build map with character conversion to handle LINDER (ints) and Mixtape (chars)
@@ -590,9 +560,9 @@ perform_osip_matching <- function(data_subset, final_intervals,
       ps_c = ps_lookup[control_id],
       cost = abs(ps_t - ps_c)
     )
-  # --- NEW EXTRACTION LOGIC ENDS HERE ---
+  
 
-  # 4. Extract matched data for ATE calculations
+  # Extract matched data for ATE calculations
   data_matched <- match.data(m_out)
 
   return(list(
@@ -603,11 +573,13 @@ perform_osip_matching <- function(data_subset, final_intervals,
   ))
 }
 
-apply_sampling <- function(data_full, dataset_name, data_config, datasets, params, treatment_col) {
-  set.seed(25)
-  # treat_col <- if(dataset_name == datasets$RHC) "swang1" else "treat"
-  # treatment_col <- data_config$TREATMENT_VAR
+apply_sampling <- function(data_full, dataset_name, data_config, datasets, 
+                           params, treatment_col) {
   
+  # In general, we should put this 25 as a parameter. But, as we aren't using 
+  # sampling we keep it like that
+  set.seed(25)
+ 
   # Identify IDs
   treated_ids <- data_full$id[data_full[[treatment_col]] == 1]
   control_ids <- data_full$id[data_full[[treatment_col]] == 0]
@@ -641,8 +613,7 @@ ensure_numeric_col <- function(df, col_name) {
     return(column_data)
   }
   
-  # Safely convert binary factors ("0", "1") to numeric (0, 1)
-  # using as.character() to avoid the factor level index trap
+  # Convert binary factors ("0", "1") to numeric (0, 1)
   return(as.numeric(as.character(column_data)))
 }
 
@@ -663,7 +634,6 @@ export_matching_report <- function(map_data, data_matched, target_dir, outfile_n
   cat("          OSIP MATCHING QUALITY REPORT             \n")
   cat("====================================================\n\n")
   
-  # --- SUMMARY TABLE ---
   cat("SUMMARY TABLE: COST PER BIN\n")
   cat(sprintf("%-15s | %-8s | %-10s | %-10s\n", "Bin", "Pairs", "Mean Cost", "Max Cost"))
   cat("----------------------------------------------------\n")
@@ -713,20 +683,6 @@ export_matching_report <- function(map_data, data_matched, target_dir, outfile_n
   message("Report exported to: ", outfile_name)
 }
 
-#' Count units in interval using Step 1 DP boundary rules
-#' Rule: (v_curr, v_next] - left-open, right-closed
-#' This matches the DP's inline logic exactly
-# count_units_dp_style <- function(ps_values, v_curr, v_next, eps = 1e-12) {
-#   # Exact logic from Step 1 DP
-#   mask <- (ps_values > v_curr) & (ps_values <= v_next + eps)
-#   return(mask)
-# }
-
-# For single values (DP inner loop)
-# is_in_interval_dp_style <- function(ps_value, v_curr, v_next, eps = 1e-12) {
-#   return(ps_value > v_curr && ps_value <= v_next + eps)
-# }
-
 save_partition_csv <- function(df,
                                delta_val,
                                base_dir,
@@ -738,14 +694,12 @@ save_partition_csv <- function(df,
 
   # 1. Validation check
   if (is.null(df) || nrow(df) == 0) {
-    warning("⚠️ Cannot export CSV: Provided df is NULL or empty.")
+    warning("Cannot export CSV: Provided df is NULL or empty.")
     return(FALSE)
   }
 
   # 2. Clone input dataframe
   export_df <- df
-
-  # res_list <- list()
 
   # 3. Round propensity score bounds to 4 decimal places (if present)
   if ("start_ps" %in% names(export_df)) export_df$start_ps <- round(export_df$start_ps, 4)
@@ -760,11 +714,6 @@ save_partition_csv <- function(df,
   names(export_df)[names(export_df) == "end_ps"]    <- "end"
   names(export_df)[names(export_df) == "n_treated"] <- "treated"
   names(export_df)[names(export_df) == "n_control"] <- "control"
-
-  # # 🆕 ADD COST COLUMN (If cost is provided)
-  # if (!is.null(cost)) {
-  #   export_df$cost <- round(cost, 4)
-  # }
 
   # 6. Construct dynamic filename based on Step logic
   if (step == 1) {
@@ -781,19 +730,19 @@ save_partition_csv <- function(df,
     step2_mode <- if (step2_flag) "robust" else "strict"
 
     if (is.null(step2_flag) || !(step2_mode %in% c("strict", "robust"))) {
-      warning("⚠️ Step 2 requires 'step2_mode' to be 'strict' or 'robust'. Defaulting to 'strict'.")
+      warning("Step 2 requires 'step2_mode' to be 'strict' or 'robust'. Defaulting to 'strict'.")
       step2_mode <- "strict"
     }
 
     filename <- sprintf("step2_heuristic_%s_%s_partition_delta_%.2f.csv",
                         heuristic_name, step2_mode, delta_val)
   } else {
-    stop("❌ Invalid step provided. 'step' must be 1 or 2.")
+    stop("nvalid step provided. 'step' must be 1 or 2.")
   }
 
   csv_file_path <- file.path(base_dir, filename)
   write.csv(export_df, file = csv_file_path, row.names = FALSE, quote = FALSE)
-  cat(sprintf("✅ Partition CSV saved to > %s\n\n", csv_file_path))
+  cat(sprintf("Partition CSV saved to > %s\n\n", csv_file_path))
   return(TRUE)
 }
 

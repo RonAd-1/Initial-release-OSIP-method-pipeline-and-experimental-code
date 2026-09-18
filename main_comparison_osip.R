@@ -45,7 +45,7 @@ matching_non_1_1 <- METHODS_NON_1_TO_1_MATCHING
 # dataset_name <- DATASET_CHOICES$NSW_MIXTAPE
 dataset_name <- DATASET_CHOICES$LINDNER
 # dataset_name <- DATASET_CHOICES$JOBS
-# dataset_name <- DATASET_CHOICES$IDHP
+# dataset_name <- DATASET_CHOICES$IHDP
 # dataset_name <- DATASET_CHOICES$NHEFS
 
 # Container for results
