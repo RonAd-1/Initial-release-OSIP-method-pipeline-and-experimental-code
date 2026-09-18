@@ -529,13 +529,7 @@ plot_partition_with_bins <- function(data_subset, intervals_df,
 
 get_treatments_in_interval_dp <- function(treatment_scores, v_left, v_right,
                                           T_sorted, eps = 1e-9) {
-  #' Get treatment unit IDs in interval (DP version)
-  #'
-  #' Interval convention:
-  #'   - v_left = 0:                    [0, R]   first interval
-  #'   - v_left matches any T_sorted:   [L, R]   treatment sits at left boundary
-  #'   - all other:                     (L, R]   standard
-  #'
+ 
   #' @param treatment_scores Named numeric vector of treatment PS (names = unit IDs)
   #' @param v_left  Left boundary
   #' @param v_right Right boundary
@@ -564,11 +558,7 @@ get_treatments_in_interval_dp <- function(treatment_scores, v_left, v_right,
 
 get_controls_in_interval_dp <- function(control_scores, v_left, v_right,
                                         eps = 1e-9, left_border) {
-  #' Get control unit IDs in interval (DP version)
-  #'
-  #' Controls ALWAYS use (L, R] to avoid double-counting across adjacent bins.
-  #' The only exception is the first interval [0, R].
-  #'
+ 
   #' @param control_scores Named numeric vector of control PS (names = unit IDs)
   #' @param v_left  Left boundary
   #' @param v_right Right boundary

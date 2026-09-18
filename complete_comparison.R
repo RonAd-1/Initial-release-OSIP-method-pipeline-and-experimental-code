@@ -334,27 +334,6 @@ compare_methods <- function(data,
   cat("                 FINAL COMPARISON TABLE\n")
   cat("═══════════════════════════════════════════════════════════════\n\n")
   
-  
-  
-  # display_df <- comparison_df %>%
-  #   # 1. Select your columns in the desired order
-  #   dplyr::select(method, n_treated, n_control, ate, se, p_value, ci_low, ci_high, 
-  #                 gamma_shift, t_stat)  
-  
-   
-      
-      # 3. Format rel_eff to scientific (keeping it 1.94E-06)
-      # rel_eff_formatted = ifelse(is.na(rel_eff), NA, format(rel_eff, scientific = TRUE, digits = 4)),
-      
-      # 4. Round the rest of the numeric metrics to 4 digits
-      # across(any_of(c("ate", "se", "p_value", "ci_low", "ci_high", 
-      #                 "gamma_shift", "t_stat")), 
-            # ~round(., 4))
-    # ) %>%
-    # 5. Bring back the formatted relative efficiency and clean up
-    # mutate(rel_eff = rel_eff_formatted) %>%
-    # dplyr::select(-rel_eff_formatted)
-  
   print(display_df)
   return(display_df)
 }
@@ -387,44 +366,6 @@ complete_comparison <- function(
 ) {
   
   covariates <- data_config$ALL_COVARIATES
-  
-  # --- HELPER 2: Safely add metrics to the summary table ---
-  # add_metric <- function(method_key, res_obj) {
-  #   
-  #   if (is.null(res_obj)) return(NULL)
-  #   
-  #   # Inside your complete_comparison.R or add_metric function
-  #   matched_df <- res_obj$data_matched
-  #   
-  #   # 1. Identify which covariates actually have more than one level in this specific match
-  #   # This prevents the "contrasts can be applied only to factors with 2 or more levels" error
-  #   has_variation <- sapply(covariates, function(cn) {
-  #     # Drop NAs then check unique values
-  #     val_count <- length(unique(na.omit(matched_df[[cn]])))
-  #     return(val_count > 1)
-  #   })
-  #   
-  #   # 2. Subset your covariates list for the balance check
-  #   active_covariates <- covariates[has_variation]
-  #   
-  #   # 3. Log if any variables were dropped from the balance table
-  #   dropped_covs <- covariates[!has_variation]
-  #   if (length(dropped_covs) > 0) {
-  #     cat(paste0("\n[Note] Dropping constant covariates from balance check (", 
-  #                res_obj$method, "): ", paste(dropped_covs, collapse = ", "), "\n"))
-  #   }
-  #   
-  #   # 4. Now run bal.tab safely
-  #   bal_obj <- bal.tab(
-  #     x = matched_df[, active_covariates, drop = FALSE], 
-  #     treat = matched_df[[treatment_col]],
-  #     stats = c("m", "ks"), 
-  #     s.d.denom = "pooled"
-  #   )
-  #   
-  #   stats <- get_balance_metrics(bal_obj)
-  #   return(data.frame(method = method_labels[[method_key]], stats))
-  # }
   
   add_metric <- function(method_key, res_obj) {
     if (is.null(res_obj)) return(NULL)
@@ -613,135 +554,6 @@ create_smd_comparison <- function(metrics_df, delta_dp, dataset_name, base_dir, 
   return(p_smd)
 }
 
-create_love_plot <- function(bal_list, delta_dp, dataset_name, base_dir, method_labels) {
-  
-  love_data <- data.frame()
-  
-  for (method_key in names(bal_list)) {
-    bal_obj <- bal_list[[method_key]]
-    if (is.null(bal_obj)) next
-    
-    stats <- as.data.frame(bal_obj$Balance)
-    smd_vector <- dplyr::coalesce(stats[["Diff.Adj"]], stats[["Diff.Un"]])
-    
-    # 1. Check if method_labels provided an explicit override for this key
-    if (method_key %in% names(method_labels)) {
-      method_display_name <- method_labels[[method_key]]
-    } else if (grepl("osip", method_key, ignore.case = TRUE)) {
-      
-      # Extract mode: "strict" or "robust"
-      dist_tag <- if (grepl("robust", method_key, ignore.case = TRUE)) "robust" else "strict"
-      
-      # Extract step info: "step1" or "step2"
-      step_str <- if (grepl("step1", method_key, ignore.case = TRUE)) "Step 1" else "Step 2"
-      
-      # Extract balanced suffix
-      is_bal <- grepl("balanced", method_key, ignore.case = TRUE)
-      bal_suffix <- if (is_bal) ", Bal" else ""
-      
-      # Build unique display name, e.g., "OSIP(robust, 0.15)" vs "OSIP(robust, 0.15, Bal)"
-      # Or: sprintf("OSIP(%s, %s, %.2f%s)", step_str, dist_tag, delta_dp, bal_suffix)
-      method_display_name <- sprintf("OSIP(%s, %.2f%s)", dist_tag, delta_dp, bal_suffix)
-      
-    } else {
-      # Fallback for standard baseline methods (e.g., PSM, Mahalanobis, Unmatched)
-      method_display_name <- method_key
-    }
-    
-    # Build df
-    df <- data.frame(
-      Method    = method_display_name,
-      Covariate = rownames(stats),
-      SMD       = round(as.numeric(smd_vector), 4),
-      stringsAsFactors = FALSE
-    )
-    
-    love_data <- rbind(love_data, df)
-  }
-  
-  # Pivot long format to wide format (Now guaranteed unique Method names!)
-  wide_balance_df <- love_data %>%
-    pivot_wider(
-      names_from = Method,
-      values_from = SMD
-    )
-  
-  # Export to CSV
-  file_name <- sprintf("love_plot_table_delta_%.2f.csv", delta_dp)
-  full_path <- file.path(base_dir, file_name)
-  write.csv(wide_balance_df, file = full_path, row.names = FALSE)
-  
-  # Clean Covariate names for ggplot
-  love_data$Covariate <- gsub("[_\\.]\\d.*", "", love_data$Covariate)
-  love_data <- love_data[!love_data$Covariate %in% c("distance", "prop.score"), ]
-  
-  all_methods <- unique(love_data$Method)
-  love_data$Is_OSIP <- grepl("OSIP", love_data$Method)
-  
-  # --- 1. Dynamic Palette & Color Mapping ---
-  standard_palette <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(length(all_methods))
-  custom_colors <- setNames(standard_palette, all_methods)
-  
-  # Pattern-based color assignment matching generated display names
-  for (m in all_methods) {
-    if (grepl("strict.*Bal", m, ignore.case = TRUE)) {
-      custom_colors[m] <- "#0044BB" # Blue (Strict Balanced)
-    } else if (grepl("strict", m, ignore.case = TRUE)) {
-      custom_colors[m] <- "#000000" # Black (Strict)
-    } else if (grepl("robust.*Bal", m, ignore.case = TRUE)) {
-      custom_colors[m] <- "#009E73" # Bluish Green (Robust Balanced)
-    } else if (grepl("robust", m, ignore.case = TRUE)) {
-      custom_colors[m] <- "#FF0000" # Red (Robust)
-    } else if (grepl("Unmatched", m, ignore.case = TRUE)) {
-      custom_colors[m] <- "#999999" # Gray
-    }
-  }
-  
-  # --- 2. Dynamic Shape Mapping ---
-  shape_values <- setNames(rep(16, length(all_methods)), all_methods)
-  for (m in all_methods) {
-    if (grepl("strict.*Bal", m, ignore.case = TRUE)) {
-      shape_values[m] <- 18 # Diamond
-    } else if (grepl("strict", m, ignore.case = TRUE)) {
-      shape_values[m] <- 17 # Triangle
-    } else if (grepl("robust.*Bal", m, ignore.case = TRUE)) {
-      shape_values[m] <- 8  # Star
-    } else if (grepl("robust", m, ignore.case = TRUE)) {
-      shape_values[m] <- 15 # Square
-    } else if (grepl("Unmatched", m, ignore.case = TRUE)) {
-      shape_values[m] <- 1  # Hollow Circle
-    }
-  }
-  
-  p_love <- ggplot(love_data, aes(x = abs(SMD), y = Covariate, color = Method, shape = Method)) +
-    geom_vline(xintercept = c(0, 0.1), linetype = c("solid", "dashed"), color = "gray") +
-    geom_point(aes(size = Is_OSIP), alpha = 0.8, position = position_dodge(width = 0.5)) +
-    theme_minimal() +
-    labs(title = paste("Covariate Balance -", dataset_name),
-         subtitle = paste("Delta =", delta_dp),
-         x = "Absolute Standardized Mean Difference (ASMD)",
-         y = "",
-         color = "Method", 
-         shape = "Method") +
-    scale_color_manual(values = custom_colors, breaks = all_methods) +
-    scale_shape_manual(values = shape_values, breaks = all_methods) +
-    scale_size_manual(values = c("TRUE" = 4.5, "FALSE" = 2.5), guide = "none") +
-    theme(
-      legend.position = "right",
-      legend.title = element_text(face = "bold"),
-      legend.text = element_text(size = 10)
-    ) +
-    guides(
-      color = guide_legend(override.aes = list(size = 5)),
-      shape = "legend" 
-    )
-  
-  file_name <- sprintf("love_plot_%s_delta_%.2f.png", dataset_name, delta_dp)
-  ggsave(file.path(base_dir, file_name), p_love, width = 12, height = 8, dpi = 300)
-  
-  return(p_love)
-}
-
 calculate_rosenbaum_gamma <- function(match_map, data_subset, outcome_var, gamma_range = seq(1, 5, by = 0.5)) {
   
   # 1. Prepare the outcome vector (ensuring alignment with the map IDs)
@@ -868,9 +680,6 @@ get_match_map <- function(m_input, dist_mat) {
       return(dist_mat[t_chr, c_chr])
     } 
     
-    # 2. Try Flipped Orientation: Control in rows, Treated in columns
-    # This solves the Jobs dataset issue where IDs like "1" are columns in the matrix
-    # but appear in the treated_id column of the quintile map.
     else if (c_chr %in% rownames(dist_mat) && t_chr %in% colnames(dist_mat)) {
       return(dist_mat[c_chr, t_chr])
     } 
@@ -880,8 +689,7 @@ get_match_map <- function(m_input, dist_mat) {
       return(NA) 
     }
   }, map$treated_id, map$control_id)
-  # --- UPDATED SYMMETRIC LOOKUP ENDS HERE ---
-  
+
   return(as.data.frame(map))
 }
 
