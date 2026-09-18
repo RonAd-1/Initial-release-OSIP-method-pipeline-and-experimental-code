@@ -1,7 +1,7 @@
 # run_all.R - Master Entry Point Pipeline
 
 cat("=================================================================\n")
-cat("                OSIP Execution Pipeline                          \n")
+cat("                OSIP Comparison to all models Execution Pipeline \n")
 cat("=================================================================\n\n")
 
 # Flag file used to track whether environment setup has been run
