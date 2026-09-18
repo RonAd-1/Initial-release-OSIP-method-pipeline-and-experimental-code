@@ -1,118 +1,5 @@
 # --- plots.R ---
 
-# plot_ps_distribution <- function(df, dataset_name, treatment_col, datasets, base_dir, title_suffix = "") {
-#   # Map dataset name to the correct column
-#   # Using the global datasets list logic
-#   # treatment_col <- data_config$TREATMENT_VAR
-#   
-#   df$treat_label <- ifelse(df[[treatment_col]] == 1, "Treated", "Control")
-#   df$treat_jitter <- jitter(as.numeric(df[[treatment_col]]), amount = 0.05)
-#   
-#   fig <- plot_ly(
-#     data = df,
-#     x = ~ps,
-#     y = ~treat_jitter,
-#     type = "scatter",
-#     mode = "markers",
-#     color = ~treat_label,
-#     colors = c("blue", "red"),
-#     hoverinfo = "text",
-#     text = ~paste(
-#       "Group:", treat_label,
-#       "<br>Propensity Score:", round(ps, 4)
-#     )
-#   ) %>%
-#     layout(
-#       title = paste("PS Distribution:", dataset_name, title_suffix),
-#       xaxis = list(title = "Propensity Score", range = c(0, 1.0)),
-#       yaxis = list(title = "", showticklabels = FALSE)
-#     )
-#   
-#   # 1. Update your path to end in .jpg
-#   storing_path <- sprintf("%sps_distribution_%s.jpg", base_dir, dataset_name)
-#   
-#   # 1. Create the plot using ggplot
-#   # We use 'text' as a dummy aesthetic for the hover info
-#   p <- ggplot(df, aes(x = ps, y = treat_jitter, color = treat_label, 
-#                       text = paste("Group:", treat_label, 
-#                                    "\nPropensity Score:", round(ps, 4)))) +
-#     geom_point(alpha = 0.7) +
-#     scale_color_manual(values = c("blue", "red")) +
-#     labs(
-#       title = paste("PS Distribution:", dataset_name, title_suffix),
-#       x = "Propensity Score",
-#       y = "",
-#       color = "Group"
-#     ) +
-#     theme_minimal() +
-#     theme(
-#       axis.text.y = element_blank(),
-#       axis.ticks.y = element_blank(),
-#       panel.grid.major.y = element_blank(),
-#       panel.grid.minor.y = element_blank()
-#     ) +
-#     xlim(0, 1.0)
-#   
-#   # 2. Save it directly and easily
-#   storing_path <- sprintf("%sps_distribution_%s.png", base_dir, dataset_name)
-#   ggsave(storing_path, plot = p, width = 10, height = 8, dpi = 300)
-#   
-#   # Display the plot directly
-#   print(fig)
-# }
-# 
-# plot_ps_distribution_trimmed <- function(df, dataset_name, treatment_col, datasets, base_dir, title_suffix = "", is_trimmed = FALSE) {
-#   
-#   df$treat_label <- ifelse(df[[treatment_col]] == 1, "Treated", "Control")
-#   df$treat_jitter <- jitter(as.numeric(df[[treatment_col]]), amount = 0.05)
-#   
-#   # Determine Plot Boundaries
-#   # If trimmed, we zoom into the actual data range plus a small buffer
-#   if (is_trimmed) {
-#     x_min <- min(df$ps, na.rm = TRUE) - 0.02
-#     x_max <- max(df$ps, na.rm = TRUE) + 0.02
-#     file_tag <- "trimmed"
-#   } else {
-#     x_min <- 0
-#     x_max <- 1.0
-#     file_tag <- "full"
-#   }
-#   
-#   # 1. GGPLOT Version (for Saving)
-#   p <- ggplot(df, aes(x = ps, y = treat_jitter, color = treat_label)) +
-#     geom_point(alpha = 0.7, size = 2) +
-#     scale_color_manual(values = c("Control" = "blue", "Treated" = "red")) +
-#     labs(
-#       title = paste("PS Distribution:", dataset_name, title_suffix),
-#       x = "Propensity Score",
-#       y = "",
-#       color = "Group"
-#     ) +
-#     theme_minimal() +
-#     coord_cartesian(xlim = c(x_min, x_max)) + # Use coord_cartesian to zoom without dropping data
-#     theme(
-#       axis.text.y = element_blank(),
-#       axis.ticks.y = element_blank(),
-#       panel.grid.major.y = element_blank(),
-#       panel.grid.minor.y = element_blank()
-#     )
-#   
-#   # Save with a unique name so you don't overwrite the original
-#   storing_path <- sprintf("%sps_distribution_%s_%s.png", base_dir, dataset_name, file_tag)
-#   ggsave(storing_path, plot = p, width = 10, height = 6, dpi = 300)
-#   
-#   # 2. PLOTLY Version (for Interactive Display)
-#   fig <- plot_ly(data = df, x = ~ps, y = ~treat_jitter, type = "scatter", mode = "markers",
-#                  color = ~treat_label, colors = c("blue", "red")) %>%
-#     layout(
-#       title = paste("PS Distribution:", dataset_name, title_suffix),
-#       xaxis = list(title = "Propensity Score", range = c(x_min, x_max)),
-#       yaxis = list(title = "", showticklabels = FALSE)
-#     )
-#   
-#   print(fig)
-# }
-
 plot_ps_distribution <- function(df, 
                                  dataset_name, 
                                  treatment_col, 
@@ -495,4 +382,133 @@ plot_match_barplot_hist <- function(distances_vector,
   })
   
   return(p)
+}
+
+create_love_plot <- function(bal_list, delta_dp, dataset_name, base_dir, method_labels) {
+  
+  love_data <- data.frame()
+  
+  for (method_key in names(bal_list)) {
+    bal_obj <- bal_list[[method_key]]
+    if (is.null(bal_obj)) next
+    
+    stats <- as.data.frame(bal_obj$Balance)
+    smd_vector <- dplyr::coalesce(stats[["Diff.Adj"]], stats[["Diff.Un"]])
+    
+    # 1. Check if method_labels provided an explicit override for this key
+    if (method_key %in% names(method_labels)) {
+      method_display_name <- method_labels[[method_key]]
+    } else if (grepl("osip", method_key, ignore.case = TRUE)) {
+      
+      # Extract mode: "strict" or "robust"
+      dist_tag <- if (grepl("robust", method_key, ignore.case = TRUE)) "robust" else "strict"
+      
+      # Extract step info: "step1" or "step2"
+      step_str <- if (grepl("step1", method_key, ignore.case = TRUE)) "Step 1" else "Step 2"
+      
+      # Extract balanced suffix
+      is_bal <- grepl("balanced", method_key, ignore.case = TRUE)
+      bal_suffix <- if (is_bal) ", Bal" else ""
+      
+      # Build unique display name, e.g., "OSIP(robust, 0.15)" vs "OSIP(robust, 0.15, Bal)"
+      # Or: sprintf("OSIP(%s, %s, %.2f%s)", step_str, dist_tag, delta_dp, bal_suffix)
+      method_display_name <- sprintf("OSIP(%s, %.2f%s)", dist_tag, delta_dp, bal_suffix)
+      
+    } else {
+      # Fallback for standard baseline methods (e.g., PSM, Mahalanobis, Unmatched)
+      method_display_name <- method_key
+    }
+    
+    # Build df
+    df <- data.frame(
+      Method    = method_display_name,
+      Covariate = rownames(stats),
+      SMD       = round(as.numeric(smd_vector), 4),
+      stringsAsFactors = FALSE
+    )
+    
+    love_data <- rbind(love_data, df)
+  }
+  
+  # Pivot long format to wide format (Now guaranteed unique Method names!)
+  wide_balance_df <- love_data %>%
+    pivot_wider(
+      names_from = Method,
+      values_from = SMD
+    )
+  
+  # Export to CSV
+  file_name <- sprintf("love_plot_table_delta_%.2f.csv", delta_dp)
+  full_path <- file.path(base_dir, file_name)
+  write.csv(wide_balance_df, file = full_path, row.names = FALSE)
+  
+  # Clean Covariate names for ggplot
+  love_data$Covariate <- gsub("[_\\.]\\d.*", "", love_data$Covariate)
+  love_data <- love_data[!love_data$Covariate %in% c("distance", "prop.score"), ]
+  
+  all_methods <- unique(love_data$Method)
+  love_data$Is_OSIP <- grepl("OSIP", love_data$Method)
+  
+  # --- 1. Dynamic Palette & Color Mapping ---
+  standard_palette <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(length(all_methods))
+  custom_colors <- setNames(standard_palette, all_methods)
+  
+  # Pattern-based color assignment matching generated display names
+  for (m in all_methods) {
+    if (grepl("strict.*Bal", m, ignore.case = TRUE)) {
+      custom_colors[m] <- "#0044BB" # Blue (Strict Balanced)
+    } else if (grepl("strict", m, ignore.case = TRUE)) {
+      custom_colors[m] <- "#000000" # Black (Strict)
+    } else if (grepl("robust.*Bal", m, ignore.case = TRUE)) {
+      custom_colors[m] <- "#009E73" # Bluish Green (Robust Balanced)
+    } else if (grepl("robust", m, ignore.case = TRUE)) {
+      custom_colors[m] <- "#FF0000" # Red (Robust)
+    } else if (grepl("Unmatched", m, ignore.case = TRUE)) {
+      custom_colors[m] <- "#999999" # Gray
+    }
+  }
+  
+  # --- 2. Dynamic Shape Mapping ---
+  shape_values <- setNames(rep(16, length(all_methods)), all_methods)
+  for (m in all_methods) {
+    if (grepl("strict.*Bal", m, ignore.case = TRUE)) {
+      shape_values[m] <- 18 # Diamond
+    } else if (grepl("strict", m, ignore.case = TRUE)) {
+      shape_values[m] <- 17 # Triangle
+    } else if (grepl("robust.*Bal", m, ignore.case = TRUE)) {
+      shape_values[m] <- 8  # Star
+    } else if (grepl("robust", m, ignore.case = TRUE)) {
+      shape_values[m] <- 15 # Square
+    } else if (grepl("Unmatched", m, ignore.case = TRUE)) {
+      shape_values[m] <- 1  # Hollow Circle
+    }
+  }
+  
+  p_love <- ggplot(love_data, aes(x = abs(SMD), y = Covariate, color = Method, shape = Method)) +
+    geom_vline(xintercept = c(0, 0.1), linetype = c("solid", "dashed"), color = "gray") +
+    geom_point(aes(size = Is_OSIP), alpha = 0.8, position = position_dodge(width = 0.5)) +
+    theme_minimal() +
+    labs(title = paste("Covariate Balance -", dataset_name),
+         subtitle = paste("Delta =", delta_dp),
+         x = "Absolute Standardized Mean Difference (ASMD)",
+         y = "",
+         color = "Method", 
+         shape = "Method") +
+    scale_color_manual(values = custom_colors, breaks = all_methods) +
+    scale_shape_manual(values = shape_values, breaks = all_methods) +
+    scale_size_manual(values = c("TRUE" = 4.5, "FALSE" = 2.5), guide = "none") +
+    theme(
+      legend.position = "right",
+      legend.title = element_text(face = "bold"),
+      legend.text = element_text(size = 10)
+    ) +
+    guides(
+      color = guide_legend(override.aes = list(size = 5)),
+      shape = "legend" 
+    )
+  
+  file_name <- sprintf("love_plot_%s_delta_%.2f.png", dataset_name, delta_dp)
+  ggsave(file.path(base_dir, file_name), p_love, width = 12, height = 8, dpi = 300)
+  
+  return(p_love)
 }
