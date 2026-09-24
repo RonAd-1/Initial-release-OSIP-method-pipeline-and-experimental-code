@@ -56,7 +56,8 @@ The pipeline generates three primary outputs to monitor and evaluate results:
 
 3. **Structured Summary Output Files:**  
    Generates dedicated output files for post-hoc analysis, such as overall performance comparisons (`consolidated_results`) and balance metrics (`love_plot_table`).
-
+   The default location for these files is defined by `base_dir` variable to `outputs/dataset_name` relative path from the project main folder.
+   
 > **Note:** When adding a new dataset or method, minor updates may also be required in helper functions called by `main_comparison_units_borders.R` (e.g., `load_and_prep_data`, `compare_methods`, `complete_comparison`).
 
 ---
